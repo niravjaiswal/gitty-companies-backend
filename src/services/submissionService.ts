@@ -49,7 +49,15 @@ export class SubmissionService {
     const createdAt = new Date(session.created_at as string);
     const totalDisconnections = (session.total_disconnections as number) ?? 0;
 
-    // 2. Read all files from the sandbox
+    // 2. Collect Claude transcripts (non-blocking)
+    let claudeTranscripts: Array<{ claudeSessionId: string; content: string }> = [];
+    try {
+      claudeTranscripts = await this.sandboxService.collectClaudeTranscripts(sandboxId);
+    } catch (error) {
+      this.logger.warn(`Failed to collect Claude transcripts for session ${sessionId}: ${error}`);
+    }
+
+    // 3. Read all files from the sandbox
     const files = await this.collectFiles(sandboxId);
 
     // Calculate summary stats
@@ -59,7 +67,7 @@ export class SubmissionService {
       totalBytes += Buffer.byteLength(content as string, 'utf-8');
     }
 
-    // 3. Query session_activity for counts
+    // 4. Query session_activity for counts
     const { count: commandCount } = await this.supabase
       .from('session_activity')
       .select('*', { count: 'exact', head: true })
@@ -72,10 +80,69 @@ export class SubmissionService {
       .eq('session_id', sessionId)
       .in('event_type', ['file_create', 'file_modify', 'file_delete', 'file_move']);
 
-    // 4. Calculate session duration
+    // 5. Parse Claude transcript stats & insert transcripts
+    let transcriptPrompts = 0;
+    let transcriptToolCalls = 0;
+
+    for (const transcript of claudeTranscripts) {
+      let prompts = 0;
+      let toolCalls = 0;
+      let tokensIn = 0;
+      let tokensOut = 0;
+
+      const lines = transcript.content.split('\n').filter((l) => l.trim().length > 0);
+      for (const line of lines) {
+        try {
+          const record = JSON.parse(line);
+          if (record.type === 'human' || record.role === 'user') prompts++;
+          if (record.type === 'tool_result' || record.type === 'tool_use') toolCalls++;
+          if (record.usage) {
+            tokensIn += record.usage.input_tokens ?? 0;
+            tokensOut += record.usage.output_tokens ?? 0;
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+
+      transcriptPrompts += prompts;
+      transcriptToolCalls += toolCalls;
+
+      try {
+        await this.supabase.from('claude_transcripts').insert({
+          session_id: sessionId,
+          claude_session_id: transcript.claudeSessionId,
+          transcript_jsonl: transcript.content,
+          total_prompts: prompts,
+          total_tool_calls: toolCalls,
+          total_tokens_in: tokensIn,
+          total_tokens_out: tokensOut,
+        });
+      } catch (err) {
+        this.logger.warn(`Failed to insert Claude transcript ${transcript.claudeSessionId}: ${err}`);
+      }
+    }
+
+    // 6. Query activity-based Claude counts for comparison
+    const { count: activityClaudePrompts } = await this.supabase
+      .from('session_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .eq('event_type', 'claude_prompt');
+
+    const { count: activityClaudeToolCalls } = await this.supabase
+      .from('session_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .eq('event_type', 'claude_tool_use');
+
+    const totalClaudePrompts = Math.max(transcriptPrompts, activityClaudePrompts ?? 0);
+    const totalClaudeToolCalls = Math.max(transcriptToolCalls, activityClaudeToolCalls ?? 0);
+
+    // 7. Calculate session duration
     const durationSeconds = Math.round((Date.now() - createdAt.getTime()) / 1000);
 
-    // 5. Insert into final_submissions
+    // 8. Insert into final_submissions
     const { error: insertError } = await this.supabase
       .from('final_submissions')
       .insert({
@@ -88,6 +155,8 @@ export class SubmissionService {
         total_file_changes: fileChangeCount ?? 0,
         session_duration_seconds: durationSeconds,
         total_disconnections: totalDisconnections,
+        total_claude_prompts: totalClaudePrompts,
+        total_claude_tool_calls: totalClaudeToolCalls,
       });
 
     if (insertError) {
@@ -95,7 +164,7 @@ export class SubmissionService {
     }
 
     this.logger.info(
-      `Submission captured for session ${sessionId}: ${fileCount} files, ${totalBytes} bytes, ${commandCount ?? 0} commands, ${fileChangeCount ?? 0} file changes`,
+      `Submission captured for session ${sessionId}: ${fileCount} files, ${totalBytes} bytes, ${commandCount ?? 0} commands, ${fileChangeCount ?? 0} file changes, ${totalClaudePrompts} claude prompts, ${totalClaudeToolCalls} claude tool calls`,
     );
   }
 

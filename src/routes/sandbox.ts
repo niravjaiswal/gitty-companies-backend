@@ -35,24 +35,37 @@ export async function sandboxRoutes(
   /**
    * POST /api/sessions — Create a new session for the authenticated user
    */
-  fastify.post('/api/sessions', async (request, reply) => {
-    const userId = request.user.id;
-
-    try {
-      const session = await sessionManager.createSession(userId);
-      return reply.status(201).send(session);
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('already has an active session')) {
-          return reply.status(409).send({ error: error.message });
-        }
-        if (error.message.includes('already used their session')) {
-          return reply.status(403).send({ error: error.message });
-        }
+  fastify.post<{
+    Body: { assignmentId?: string };
+  }>(
+    '/api/sessions',
+    async (request, reply) => {
+      if (!request.body?.assignmentId) {
+        return reply.status(400).send({ error: 'assignmentId is required' });
       }
-      throw error;
-    }
-  });
+
+      try {
+        const result = await sessionManager.createSessionForAssignment(
+          request.user.id,
+          request.body.assignmentId,
+        );
+        return reply.status(201).send(result.session);
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.message.includes('active session') || error.message.includes('completed session')) {
+            return reply.status(409).send({ error: error.message });
+          }
+          if (error.message.includes('claimed') || error.message.includes('cannot be started')) {
+            return reply.status(403).send({ error: error.message });
+          }
+          if (error.message.includes('not found')) {
+            return reply.status(404).send({ error: error.message });
+          }
+        }
+        throw error;
+      }
+    },
+  );
 
   /**
    * GET /api/sessions/me — Get the authenticated user's active session (or null)
@@ -95,7 +108,27 @@ export async function sandboxRoutes(
       if (session.userId !== request.user.id) {
         return reply.status(403).send({ error: 'Not authorized for this session' });
       }
-      return session;
+      const supabase = getSupabaseAdmin();
+      const { data: assessment } = session.assessmentId
+        ? await supabase
+            .from('assessments')
+            .select('id, title, summary, instructions_md, duration_minutes')
+            .eq('id', session.assessmentId)
+            .maybeSingle()
+        : { data: null };
+
+      return {
+        ...session,
+        assessment: assessment
+          ? {
+              id: assessment.id,
+              title: assessment.title,
+              summary: assessment.summary,
+              instructionsMd: assessment.instructions_md,
+              durationMinutes: assessment.duration_minutes,
+            }
+          : null,
+      };
     },
   );
 

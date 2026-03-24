@@ -6,6 +6,7 @@ import { generateRepo } from "./stage3/generate-repo.js";
 
 const input = process.argv[2];
 
+
 if (!input) {
   console.error("Usage: npx tsx src/index.ts \"<assessment description>\"");
   process.exit(1);

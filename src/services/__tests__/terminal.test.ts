@@ -88,6 +88,8 @@ function createMockSession(overrides: Partial<Session> = {}): Session {
     stoppedAt: null,
     totalDisconnections: 0,
     codeServerUrl: null,
+    assessmentId: null,
+    assignmentId: null,
     ...overrides,
   };
 }
@@ -116,6 +118,7 @@ function createMockSessionManager(session: Session | null) {
     getSession: vi.fn().mockResolvedValue(session),
     updateActivity: vi.fn().mockResolvedValue(undefined),
     createSession: vi.fn(),
+    createSessionForAssignment: vi.fn(),
     getActiveSessionByUserId: vi.fn(),
     stopSession: vi.fn(),
     cleanupStaleSessions: vi.fn(),

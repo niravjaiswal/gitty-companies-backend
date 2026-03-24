@@ -14,6 +14,7 @@ interface ActivityEvent {
 interface CollectorState {
   fsOffset: number;
   cmdOffset: number;
+  claudeOffset: number;
   cycleCount: number;
 }
 
@@ -115,7 +116,7 @@ export class ActivityCollector {
   private logger: Logger;
   private sessionId: string;
 
-  private state: CollectorState = { fsOffset: 0, cmdOffset: 0, cycleCount: 0 };
+  private state: CollectorState = { fsOffset: 0, cmdOffset: 0, claudeOffset: 0, cycleCount: 0 };
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private collecting = false; // guard against concurrent collectActivity calls
 
@@ -239,15 +240,32 @@ export class ActivityCollector {
       // File may not exist yet
     }
 
-    // Deduplicate fs events
+    // ── Claude events ──────────────────────────────────
+    try {
+      const claudeRaw = await this.sandboxService.readFile(sandboxId, '/tmp/monitor/claude-events.jsonl');
+      if (claudeRaw.length < this.state.claudeOffset) {
+        this.state.claudeOffset = 0;
+      }
+      const newContent = claudeRaw.slice(this.state.claudeOffset);
+      this.state.claudeOffset = claudeRaw.length;
+
+      if (newContent.trim().length > 0) {
+        const parsed = this.parseClaudeEvents(newContent);
+        allEvents.push(...parsed);
+      }
+    } catch {
+      // File may not exist yet
+    }
+
+    // Deduplicate fs events only — command and claude events pass through unchanged
     const fsEvents = allEvents.filter(
-      (e) => e.event_type !== 'command_run',
+      (e) => e.event_type !== 'command_run' && !e.event_type.startsWith('claude_'),
     );
-    const cmdEvents = allEvents.filter(
-      (e) => e.event_type === 'command_run',
+    const passThrough = allEvents.filter(
+      (e) => e.event_type === 'command_run' || e.event_type.startsWith('claude_'),
     );
     const dedupedFs = deduplicateFsEvents(fsEvents);
-    const finalEvents = [...dedupedFs, ...cmdEvents];
+    const finalEvents = [...dedupedFs, ...passThrough];
 
     // Batch insert into session_activity
     if (finalEvents.length > 0) {
@@ -318,6 +336,62 @@ export class ActivityCollector {
         metadata: {},
         occurred_at: timestamp,
       });
+    }
+
+    return events;
+  }
+
+  parseClaudeEvents(raw: string): ActivityEvent[] {
+    const events: ActivityEvent[] = [];
+    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+
+    for (const line of lines) {
+      try {
+        const record = JSON.parse(line);
+        if (!record.hook_event || !record.timestamp) continue;
+
+        const hookEvent: string = record.hook_event;
+        const payload = record.payload ?? {};
+
+        let eventType: string;
+        let detail: string;
+
+        switch (hookEvent) {
+          case 'UserPromptSubmit':
+            eventType = 'claude_prompt';
+            detail = typeof payload.prompt === 'string'
+              ? payload.prompt.slice(0, 1000)
+              : JSON.stringify(payload).slice(0, 1000);
+            break;
+          case 'PreToolUse':
+          case 'PostToolUse':
+            eventType = 'claude_tool_use';
+            detail = typeof payload.tool_name === 'string'
+              ? payload.tool_name
+              : (typeof payload.name === 'string' ? payload.name : hookEvent);
+            break;
+          case 'Stop':
+            eventType = 'claude_response';
+            detail = typeof payload.last_assistant_message === 'string'
+              ? payload.last_assistant_message.slice(0, 1000)
+              : (typeof payload.response === 'string'
+                  ? payload.response.slice(0, 1000)
+                  : 'Claude response');
+            break;
+          default:
+            continue;
+        }
+
+        events.push({
+          session_id: this.sessionId,
+          event_type: eventType,
+          detail,
+          metadata: { hook_event: hookEvent, payload },
+          occurred_at: record.timestamp,
+        });
+      } catch {
+        // Skip malformed JSONL lines
+      }
     }
 
     return events;
@@ -432,6 +506,7 @@ export class ActivityCollector {
         // Reset offsets since restarted agent creates fresh log files
         this.state.fsOffset = 0;
         this.state.cmdOffset = 0;
+        this.state.claudeOffset = 0;
       }
     } catch {
       // If we can't even check, try to restart
@@ -439,6 +514,7 @@ export class ActivityCollector {
         await this.sandboxService.startMonitor(sandboxId);
         this.state.fsOffset = 0;
         this.state.cmdOffset = 0;
+        this.state.claudeOffset = 0;
       } catch (restartErr) {
         this.logger.error(
           `ActivityCollector: failed to restart monitor for session ${this.sessionId}: ${restartErr}`,

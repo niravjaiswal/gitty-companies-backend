@@ -139,6 +139,7 @@ function createMockSessionManager(): SessionManager {
   return {
     getSession: vi.fn(),
     createSession: vi.fn(),
+    createSessionForAssignment: vi.fn(),
     getActiveSessionByUserId: vi.fn(),
     getSessionHistory: vi.fn(),
     updateActivity: vi.fn().mockResolvedValue(undefined),

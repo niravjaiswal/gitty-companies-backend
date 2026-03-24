@@ -76,6 +76,8 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     stoppedAt: null,
     totalDisconnections: 0,
     codeServerUrl: 'https://code.example.com',
+    assessmentId: null,
+    assignmentId: null,
     ...overrides,
   };
 }
@@ -84,6 +86,7 @@ function createMockSessionManager(session: Session | null = makeSession()) {
   return {
     getSession: vi.fn().mockResolvedValue(session),
     createSession: vi.fn(),
+    createSessionForAssignment: vi.fn(),
     getActiveSessionByUserId: vi.fn(),
     getSessionHistory: vi.fn(),
     updateActivity: vi.fn(),
@@ -139,6 +142,8 @@ describe('Activity routes', () => {
         `/api/sessions/${TEST_SESSION_ID}/snapshots/snap-1`,
         `/api/sessions/${TEST_SESSION_ID}/submission`,
         `/api/sessions/${TEST_SESSION_ID}/timeline`,
+        `/api/sessions/${TEST_SESSION_ID}/claude-transcripts`,
+        `/api/sessions/${TEST_SESSION_ID}/claude-transcripts/1`,
       ];
 
       for (const url of routes) {
@@ -162,6 +167,8 @@ describe('Activity routes', () => {
         `/api/sessions/${TEST_SESSION_ID}/snapshots/snap-1`,
         `/api/sessions/${TEST_SESSION_ID}/submission`,
         `/api/sessions/${TEST_SESSION_ID}/timeline`,
+        `/api/sessions/${TEST_SESSION_ID}/claude-transcripts`,
+        `/api/sessions/${TEST_SESSION_ID}/claude-transcripts/1`,
       ];
 
       for (const url of routes) {
@@ -680,7 +687,7 @@ describe('Activity routes', () => {
       });
     });
 
-    it('returns correct summary stats', async () => {
+    it('returns correct summary stats including Claude stats', async () => {
       const mockEvents = [
         { event_type: 'command_run', detail: 'npm install', occurred_at: '2026-01-15T09:01:00Z' },
         { event_type: 'command_run', detail: 'npm test', occurred_at: '2026-01-15T09:02:00Z' },
@@ -688,7 +695,11 @@ describe('Activity routes', () => {
         { event_type: 'file_modify', detail: 'index.ts', occurred_at: '2026-01-15T09:04:00Z' },
         { event_type: 'file_delete', detail: 'old.ts', occurred_at: '2026-01-15T09:05:00Z' },
         { event_type: 'file_move', detail: 'renamed.ts', occurred_at: '2026-01-15T09:06:00Z' },
-        { event_type: 'focus_change', detail: null, occurred_at: '2026-01-15T09:07:00Z' },
+        { event_type: 'claude_prompt', detail: 'write hello', occurred_at: '2026-01-15T09:07:00Z' },
+        { event_type: 'claude_tool_use', detail: 'Write', occurred_at: '2026-01-15T09:07:30Z' },
+        { event_type: 'claude_tool_use', detail: 'Read', occurred_at: '2026-01-15T09:07:45Z' },
+        { event_type: 'claude_response', detail: 'Done!', occurred_at: '2026-01-15T09:08:00Z' },
+        { event_type: 'focus_change', detail: null, occurred_at: '2026-01-15T09:09:00Z' },
       ];
 
       mockSupabaseFrom.mockImplementation((table: string) => {
@@ -714,6 +725,8 @@ describe('Activity routes', () => {
 
       expect(body.total_commands).toBe(2); // 2 command_run events
       expect(body.total_file_changes).toBe(4); // file_create + file_modify + file_delete + file_move
+      expect(body.total_claude_prompts).toBe(1); // 1 claude_prompt event
+      expect(body.total_claude_tool_calls).toBe(2); // 2 claude_tool_use events
       expect(body.total_duration_seconds).toBeTypeOf('number');
       expect(body.total_duration_seconds).toBeGreaterThan(0);
     });
@@ -816,6 +829,185 @@ describe('Activity routes', () => {
       expect(body.timeline).toEqual([]);
       expect(body.total_commands).toBe(0);
       expect(body.total_file_changes).toBe(0);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GET /api/sessions/:sessionId/claude-transcripts
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('GET /api/sessions/:sessionId/claude-transcripts', () => {
+    const baseUrl = `/api/sessions/${TEST_SESSION_ID}/claude-transcripts`;
+
+    it('returns transcript metadata list', async () => {
+      const mockTranscripts = [
+        { id: 1, claude_session_id: 'cs-1', total_prompts: 5, total_tool_calls: 10, total_tokens_in: 1000, total_tokens_out: 2000, collected_at: '2026-01-15T10:00:00Z' },
+        { id: 2, claude_session_id: 'cs-2', total_prompts: 3, total_tool_calls: 7, total_tokens_in: 500, total_tokens_out: 1500, collected_at: '2026-01-15T10:05:00Z' },
+      ];
+
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'claude_transcripts') {
+          return createQueryBuilder({ data: mockTranscripts, error: null });
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: baseUrl,
+        headers: { authorization: 'Bearer valid-token' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ transcripts: mockTranscripts });
+    });
+
+    it('returns empty array when no transcripts exist', async () => {
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'claude_transcripts') {
+          return createQueryBuilder({ data: [], error: null });
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: baseUrl,
+        headers: { authorization: 'Bearer valid-token' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ transcripts: [] });
+    });
+
+    it('returns 500 when query fails', async () => {
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'claude_transcripts') {
+          return createQueryBuilder({ data: null, error: { message: 'db error' } });
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: baseUrl,
+        headers: { authorization: 'Bearer valid-token' },
+      });
+
+      expect(res.statusCode).toBe(500);
+      expect(res.json()).toEqual({ error: 'Failed to query Claude transcripts' });
+    });
+
+    it('selects only metadata columns (no transcript_jsonl)', async () => {
+      const builder = createQueryBuilder({ data: [], error: null });
+
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'claude_transcripts') {
+          return builder;
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      await app.inject({
+        method: 'GET',
+        url: baseUrl,
+        headers: { authorization: 'Bearer valid-token' },
+      });
+
+      expect(builder.select).toHaveBeenCalledWith(
+        'id, claude_session_id, total_prompts, total_tool_calls, total_tokens_in, total_tokens_out, collected_at',
+      );
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GET /api/sessions/:sessionId/claude-transcripts/:transcriptId
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('GET /api/sessions/:sessionId/claude-transcripts/:transcriptId', () => {
+    const baseUrl = `/api/sessions/${TEST_SESSION_ID}/claude-transcripts/1`;
+
+    it('returns full transcript with JSONL content', async () => {
+      const mockTranscript = {
+        id: 1,
+        session_id: TEST_SESSION_ID,
+        claude_session_id: 'cs-1',
+        transcript_jsonl: '{"type":"human","content":"hello"}\n',
+        total_prompts: 1,
+        total_tool_calls: 0,
+        total_tokens_in: 100,
+        total_tokens_out: 200,
+        collected_at: '2026-01-15T10:00:00Z',
+      };
+
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'claude_transcripts') {
+          return createQueryBuilder({ data: mockTranscript, error: null });
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: baseUrl,
+        headers: { authorization: 'Bearer valid-token' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual(mockTranscript);
+    });
+
+    it('returns 404 when transcript does not exist', async () => {
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'claude_transcripts') {
+          return createQueryBuilder({ data: null, error: { code: 'PGRST116', message: 'not found' } });
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: baseUrl,
+        headers: { authorization: 'Bearer valid-token' },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({ error: 'Transcript not found' });
+    });
+
+    it('filters by both transcriptId and sessionId', async () => {
+      const builder = createQueryBuilder({ data: { id: 1 }, error: null });
+
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'claude_transcripts') {
+          return builder;
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      await app.inject({
+        method: 'GET',
+        url: baseUrl,
+        headers: { authorization: 'Bearer valid-token' },
+      });
+
+      expect(builder.eq).toHaveBeenCalledWith('id', '1');
+      expect(builder.eq).toHaveBeenCalledWith('session_id', TEST_SESSION_ID);
+      expect(builder.single).toHaveBeenCalled();
     });
   });
 

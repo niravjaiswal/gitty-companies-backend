@@ -14,6 +14,8 @@ SNAPSHOT_BASE="$MONITOR_DIR/snapshots"
 FS_LOG="$MONITOR_DIR/fs-events.log"
 CMD_LOG="$MONITOR_DIR/command-history.log"
 PID_FILE="$MONITOR_DIR/agent.pid"
+CLAUDE_LOG="$MONITOR_DIR/claude-events.jsonl"
+TERMINAL_SESSIONS_DIR="$MONITOR_DIR/terminal-sessions"
 
 # Track child PIDs for cleanup
 CHILD_PIDS=()
@@ -28,8 +30,8 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # ── Setup ────────────────────────────────────────────────────
-mkdir -p "$MONITOR_DIR" "$SNAPSHOT_BASE"
-touch "$FS_LOG" "$CMD_LOG"
+mkdir -p "$MONITOR_DIR" "$SNAPSHOT_BASE" "$TERMINAL_SESSIONS_DIR"
+touch "$FS_LOG" "$CMD_LOG" "$CLAUDE_LOG"
 
 # Write our own PID
 echo $$ > "$PID_FILE"
@@ -58,6 +60,13 @@ fi
 # logs its commands with UTC timestamps.
 cat >> /vercel/sandbox/.bashrc << 'MONITOR_EOF'
 export PROMPT_COMMAND='echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $(history 1 | sed "s/^[ ]*[0-9]*[ ]*//")" >> /tmp/monitor/command-history.log'
+
+# Wrap interactive shells in script(1) to capture full terminal I/O
+if [ -z "$SCRIPT_RUNNING" ] && command -v script &>/dev/null; then
+  export SCRIPT_RUNNING=1
+  exec script -q -f "/tmp/monitor/terminal-sessions/$(date -u +%Y%m%dT%H%M%SZ)-$$.typescript" \
+    -T "/tmp/monitor/terminal-sessions/$(date -u +%Y%m%dT%H%M%SZ)-$$.timing"
+fi
 MONITOR_EOF
 
 # ── 3. Periodic file-content snapshots ──────────────────────

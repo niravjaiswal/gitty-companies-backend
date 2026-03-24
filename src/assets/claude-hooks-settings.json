@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "/tmp/monitor/claude-hook.sh UserPromptSubmit"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "/tmp/monitor/claude-hook.sh PreToolUse"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "/tmp/monitor/claude-hook.sh PostToolUse"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "/tmp/monitor/claude-hook.sh Stop"
+      }
+    ]
+  }
+}

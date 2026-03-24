@@ -24,9 +24,16 @@ export interface Session {
   stoppedAt: Date | null;
   totalDisconnections: number;
   codeServerUrl: string | null;
+  assessmentId: string | null;
+  assignmentId: string | null;
 }
 
-/** Maps a Supabase row to our Session interface */
+export interface SessionStartResult {
+  session: Session;
+  assignmentId: string;
+  assessmentId: string;
+}
+
 function rowToSession(row: Record<string, unknown>): Session {
   return {
     id: row.id as string,
@@ -39,13 +46,11 @@ function rowToSession(row: Record<string, unknown>): Session {
     stoppedAt: row.stopped_at ? new Date(row.stopped_at as string) : null,
     totalDisconnections: (row.total_disconnections as number) ?? 0,
     codeServerUrl: (row.code_server_url as string) ?? null,
+    assessmentId: (row.assessment_id as string) ?? null,
+    assignmentId: (row.assignment_id as string) ?? null,
   };
 }
 
-/**
- * Manages the mapping between users and sandbox sessions.
- * Sessions are persisted in Supabase; live sandbox instances are tracked in-memory.
- */
 export class SessionManager {
   private supabase: SupabaseClient;
   private sandboxService: SandboxService;
@@ -67,43 +72,45 @@ export class SessionManager {
     this.submissionService = new SubmissionService(supabase, sandboxService, logger);
   }
 
-  /**
-   * Creates a new session for the given user.
-   * Enforces: has_used_session flag (one session ever per user) and no active sessions.
-   */
-  async createSession(userId: string): Promise<Session> {
-    // Verify profile exists
-    const { data: profile, error: profileError } = await this.supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', userId)
+  async createSessionForAssignment(userId: string, assignmentId: string): Promise<SessionStartResult> {
+    const { data: assignment, error: assignmentError } = await this.supabase
+      .from('assessment_assignments')
+      .select('id, assessment_id, candidate_user_id, status')
+      .eq('id', assignmentId)
       .single();
 
-    if (profileError || !profile) {
-      throw new Error('Profile not found');
+    if (assignmentError || !assignment) {
+      throw new Error('Assignment not found');
     }
 
-    // Check no active session exists
-    const existing = await this.getActiveSessionByUserId(userId);
-    if (existing) {
-      throw new Error(`User ${userId} already has an active session: ${existing.id}`);
+    if (assignment.candidate_user_id !== userId) {
+      throw new Error('Assignment is not claimed by this user');
     }
 
-    // Mark profile as having used a session
-    const { error: updateError } = await this.supabase
-      .from('profiles')
-      .update({ has_used_session: true, session_ended_reason: null })
-      .eq('id', userId);
-
-    if (updateError) {
-      throw new Error(`Failed to update profile: ${updateError.message}`);
+    if (!['assigned', 'claimed'].includes(assignment.status as string)) {
+      throw new Error(`Assignment cannot be started from status: ${assignment.status as string}`);
     }
 
-    // Insert session row
+    const existingUserSession = await this.getActiveSessionByUserId(userId);
+    if (existingUserSession) {
+      throw new Error(`User ${userId} already has an active session: ${existingUserSession.id}`);
+    }
+
+    const existingAssignmentSession = await this.getSessionByAssignmentId(assignmentId);
+    if (existingAssignmentSession) {
+      const activeStatuses: SessionStatus[] = ['starting', 'running', 'disconnected'];
+      if (activeStatuses.includes(existingAssignmentSession.status)) {
+        throw new Error(`Assignment ${assignmentId} already has an active session`);
+      }
+      throw new Error(`Assignment ${assignmentId} already has a completed session`);
+    }
+
     const { data: sessionRow, error: insertError } = await this.supabase
       .from('sessions')
       .insert({
         user_id: userId,
+        assessment_id: assignment.assessment_id,
+        assignment_id: assignmentId,
         status: 'starting',
       })
       .select()
@@ -113,18 +120,30 @@ export class SessionManager {
       throw new Error(`Failed to create session: ${insertError?.message}`);
     }
 
-    await this.logEvent(sessionRow.id, 'created');
-    this.logger.info(`Session starting: ${sessionRow.id} for user ${userId}`);
+    await this.supabase
+      .from('assessment_assignments')
+      .update({
+        status: 'started',
+        started_at: new Date().toISOString(),
+      })
+      .eq('id', assignmentId);
 
-    // Create the sandbox and set up code-server
+    await this.logEvent(sessionRow.id, 'created', {
+      assessmentId: assignment.assessment_id,
+      assignmentId,
+    });
+    this.logger.info(`Session starting: ${sessionRow.id} for user ${userId}, assignment ${assignmentId}`);
+
     try {
       const { id: sandboxId } = await this.sandboxService.createSandbox();
-
-      // Set up code-server inside the sandbox
       const { url: codeServerUrl } = await this.sandboxService.setupCodeServer(sandboxId);
-
-      // Start the activity monitor agent
       await this.sandboxService.startMonitor(sandboxId);
+
+      try {
+        await this.sandboxService.deployClaudeHooks(sandboxId);
+      } catch (error) {
+        this.logger.warn(`Failed to deploy Claude Code hooks: ${error}`);
+      }
 
       const { data: updated, error: sandboxUpdateError } = await this.supabase
         .from('sessions')
@@ -142,18 +161,23 @@ export class SessionManager {
       }
 
       await this.logEvent(sessionRow.id, 'running');
-      this.logger.info(`Session running: ${sessionRow.id} (sandbox: ${sandboxId}, code-server: ${codeServerUrl})`);
-
-      // Start activity collection for this session
       this.collectorManager.startForSession(sessionRow.id);
 
-      return rowToSession(updated);
+      return {
+        session: rowToSession(updated),
+        assignmentId,
+        assessmentId: assignment.assessment_id as string,
+      };
     } catch (error) {
-      // Mark session as error if sandbox creation fails
       await this.supabase
         .from('sessions')
         .update({ status: 'error', stopped_at: new Date().toISOString() })
         .eq('id', sessionRow.id);
+
+      await this.supabase
+        .from('assessment_assignments')
+        .update({ status: 'claimed' })
+        .eq('id', assignmentId);
 
       await this.logEvent(sessionRow.id, 'error', { reason: String(error) });
       this.logger.error(`Failed to create sandbox for session ${sessionRow.id}: ${error}`);
@@ -161,9 +185,6 @@ export class SessionManager {
     }
   }
 
-  /**
-   * Returns the session if it exists, or null.
-   */
   async getSession(sessionId: string): Promise<Session | null> {
     const { data, error } = await this.supabase
       .from('sessions')
@@ -175,9 +196,17 @@ export class SessionManager {
     return rowToSession(data);
   }
 
-  /**
-   * Returns the active (non-terminal) session for a user, or null.
-   */
+  async getSessionByAssignmentId(assignmentId: string): Promise<Session | null> {
+    const { data, error } = await this.supabase
+      .from('sessions')
+      .select('*')
+      .eq('assignment_id', assignmentId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return rowToSession(data);
+  }
+
   async getActiveSessionByUserId(userId: string): Promise<Session | null> {
     const { data, error } = await this.supabase
       .from('sessions')
@@ -191,9 +220,6 @@ export class SessionManager {
     return rowToSession(data);
   }
 
-  /**
-   * Returns the user's past sessions (last 10), ordered by creation date descending.
-   */
   async getSessionHistory(userId: string): Promise<Session[]> {
     const { data, error } = await this.supabase
       .from('sessions')
@@ -206,9 +232,6 @@ export class SessionManager {
     return data.map(rowToSession);
   }
 
-  /**
-   * Updates lastActivityAt to the current time.
-   */
   async updateActivity(sessionId: string): Promise<void> {
     await this.supabase
       .from('sessions')
@@ -216,10 +239,6 @@ export class SessionManager {
       .eq('id', sessionId);
   }
 
-  /**
-   * Marks a session as disconnected. Starts the grace period.
-   * Does NOT destroy the sandbox.
-   */
   async disconnectSession(sessionId: string): Promise<void> {
     const session = await this.getSession(sessionId);
     if (!session || session.status !== 'running') return;
@@ -237,10 +256,6 @@ export class SessionManager {
     this.logger.info(`Session disconnected: ${sessionId} (grace period started)`);
   }
 
-  /**
-   * Reconnects a disconnected session if within the grace period.
-   * Returns the reconnected session, or null if grace period expired (session abandoned).
-   */
   async reconnectSession(sessionId: string): Promise<Session | null> {
     const session = await this.getSession(sessionId);
     if (!session || session.status !== 'disconnected') return null;
@@ -251,12 +266,10 @@ export class SessionManager {
     const elapsed = now - disconnectedAt;
 
     if (elapsed > config.disconnectGracePeriodMs) {
-      // Grace period expired — abandon
       await this.abandonSession(sessionId);
       return null;
     }
 
-    // Reconnect
     const { data, error } = await this.supabase
       .from('sessions')
       .update({
@@ -271,22 +284,15 @@ export class SessionManager {
     if (error || !data) return null;
 
     await this.logEvent(sessionId, 'reconnected');
-    this.logger.info(`Session reconnected: ${sessionId}`);
     return rowToSession(data);
   }
 
-  /**
-   * Permanently destroys a session due to grace period expiry.
-   * Destroys the sandbox and marks the session as abandoned.
-   */
   async abandonSession(sessionId: string): Promise<void> {
     const session = await this.getSession(sessionId);
     if (!session) return;
 
-    // Stop activity collection (final collection run before sandbox teardown)
     await this.collectorManager.stopForSession(sessionId);
 
-    // Capture final submission before sandbox destruction
     if (session.sandboxId) {
       try {
         await this.submissionService.captureSubmission(sessionId);
@@ -295,7 +301,6 @@ export class SessionManager {
       }
     }
 
-    // Destroy sandbox if it exists
     if (session.sandboxId) {
       try {
         await this.sandboxService.destroySandbox(session.sandboxId);
@@ -312,20 +317,21 @@ export class SessionManager {
       })
       .eq('id', sessionId);
 
-    // Update profile with reason
+    if (session.assignmentId) {
+      await this.supabase
+        .from('assessment_assignments')
+        .update({ status: 'expired' })
+        .eq('id', session.assignmentId);
+    }
+
     await this.supabase
       .from('profiles')
       .update({ session_ended_reason: 'connection_lost' })
       .eq('id', session.userId);
 
     await this.logEvent(sessionId, 'abandoned');
-    this.logger.info(`Session abandoned: ${sessionId}`);
   }
 
-  /**
-   * Stops a session cleanly (user-initiated or system).
-   * Destroys sandbox and marks as stopped/timed_out.
-   */
   async stopSession(sessionId: string, reason?: string): Promise<void> {
     const session = await this.getSession(sessionId);
     if (!session) {
@@ -337,10 +343,8 @@ export class SessionManager {
       return;
     }
 
-    // Stop activity collection (final collection run before sandbox teardown)
     await this.collectorManager.stopForSession(sessionId);
 
-    // Capture final submission before sandbox destruction
     if (session.sandboxId) {
       try {
         await this.submissionService.captureSubmission(sessionId);
@@ -349,7 +353,6 @@ export class SessionManager {
       }
     }
 
-    // Destroy sandbox
     if (session.sandboxId) {
       try {
         await this.sandboxService.destroySandbox(session.sandboxId);
@@ -369,25 +372,28 @@ export class SessionManager {
       })
       .eq('id', sessionId);
 
+    if (session.assignmentId) {
+      await this.supabase
+        .from('assessment_assignments')
+        .update({
+          status: reason === 'timed_out' ? 'expired' : 'completed',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', session.assignmentId);
+    }
+
     await this.supabase
       .from('profiles')
       .update({ session_ended_reason: endedReason })
       .eq('id', session.userId);
 
     await this.logEvent(sessionId, status, { reason });
-    this.logger.info(`Session stopped: ${sessionId} (reason: ${reason ?? 'user'})`);
   }
 
-  /**
-   * Finds and handles stale sessions. Runs every 10s.
-   * 1. Expired disconnected sessions → abandon
-   * 2. Sessions exceeding max duration → timeout
-   */
   async cleanupStaleSessions(): Promise<void> {
     const config = loadConfig();
     const now = Date.now();
 
-    // 1. Find expired disconnected sessions
     const { data: disconnected } = await this.supabase
       .from('sessions')
       .select('*')
@@ -397,13 +403,11 @@ export class SessionManager {
       for (const row of disconnected) {
         const disconnectedAt = new Date(row.disconnected_at).getTime();
         if (now - disconnectedAt > config.disconnectGracePeriodMs) {
-          this.logger.info(`Session ${row.id} grace period expired, abandoning`);
           await this.abandonSession(row.id);
         }
       }
     }
 
-    // 2. Find running sessions with stale heartbeats (no activity for 60s)
     const { data: staleRunning } = await this.supabase
       .from('sessions')
       .select('*')
@@ -413,15 +417,11 @@ export class SessionManager {
       for (const row of staleRunning) {
         const lastActivity = new Date(row.last_activity_at).getTime();
         if (now - lastActivity > 60_000) {
-          this.logger.info(
-            `Session ${row.id} has no heartbeat for ${Math.round((now - lastActivity) / 1000)}s, abandoning`,
-          );
           await this.abandonSession(row.id);
         }
       }
     }
 
-    // 3. Find sessions exceeding max duration
     const { data: longRunning } = await this.supabase
       .from('sessions')
       .select('*')
@@ -431,18 +431,12 @@ export class SessionManager {
       for (const row of longRunning) {
         const createdAt = new Date(row.created_at).getTime();
         if (now - createdAt > config.maxSandboxDurationMs) {
-          this.logger.info(
-            `Session ${row.id} exceeded max duration (${Math.round((now - createdAt) / 1000)}s), timing out`,
-          );
           await this.stopSession(row.id, 'timed_out');
         }
       }
     }
   }
 
-  /**
-   * Starts the periodic stale session cleanup (every 10 seconds).
-   */
   startCleanupInterval(): void {
     this.cleanupInterval = setInterval(() => {
       this.cleanupStaleSessions().catch((error) => {
@@ -451,9 +445,6 @@ export class SessionManager {
     }, 10_000);
   }
 
-  /**
-   * Stops the periodic cleanup interval.
-   */
   stopCleanupInterval(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
@@ -461,9 +452,6 @@ export class SessionManager {
     }
   }
 
-  /**
-   * Stops all active sessions. Used during graceful shutdown.
-   */
   async stopAllSessions(): Promise<void> {
     const { data: activeSessions } = await this.supabase
       .from('sessions')
@@ -472,17 +460,9 @@ export class SessionManager {
 
     if (!activeSessions || activeSessions.length === 0) return;
 
-    this.logger.info(`Stopping all sessions (${activeSessions.length} active)...`);
-    await Promise.allSettled(
-      activeSessions.map((row) => this.stopSession(row.id)),
-    );
+    await Promise.allSettled(activeSessions.map((row) => this.stopSession(row.id)));
   }
 
-  /**
-   * Cleans up orphaned sessions on server restart.
-   * Sessions with status 'running' or 'disconnected' that don't have
-   * a live sandbox instance are marked as abandoned.
-   */
   async cleanupOrphanedSessions(): Promise<void> {
     const { data: orphans } = await this.supabase
       .from('sessions')
@@ -491,16 +471,10 @@ export class SessionManager {
 
     if (!orphans || orphans.length === 0) return;
 
-    this.logger.info(`Found ${orphans.length} potentially orphaned sessions`);
-
     for (const row of orphans) {
-      // Check if we have a live sandbox for this session
       try {
         this.sandboxService.getSandbox(row.sandbox_id);
-        // Sandbox exists in memory — session is still alive
       } catch {
-        // Sandbox not in memory — this is an orphan from a previous server instance
-        this.logger.info(`Orphaned session ${row.id} (no live sandbox), marking abandoned`);
         await this.supabase
           .from('sessions')
           .update({
@@ -508,6 +482,13 @@ export class SessionManager {
             stopped_at: new Date().toISOString(),
           })
           .eq('id', row.id);
+
+        if (row.assignment_id) {
+          await this.supabase
+            .from('assessment_assignments')
+            .update({ status: 'expired' })
+            .eq('id', row.assignment_id);
+        }
 
         await this.supabase
           .from('profiles')
@@ -519,7 +500,6 @@ export class SessionManager {
     }
   }
 
-  /** Logs a session event to the session_events table */
   private async logEvent(
     sessionId: string,
     eventType: string,

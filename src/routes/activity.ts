@@ -334,6 +334,12 @@ export async function activityRoutes(
       const totalFileChanges = (events ?? []).filter((e) =>
         ['file_create', 'file_modify', 'file_delete', 'file_move'].includes(e.event_type),
       ).length;
+      const totalClaudePrompts = (events ?? []).filter(
+        (e) => e.event_type === 'claude_prompt',
+      ).length;
+      const totalClaudeToolCalls = (events ?? []).filter(
+        (e) => e.event_type === 'claude_tool_use',
+      ).length;
 
       const sessionCreatedAt = session.createdAt.getTime();
       const endTime = session.stoppedAt ? session.stoppedAt.getTime() : Date.now();
@@ -344,7 +350,87 @@ export async function activityRoutes(
         total_duration_seconds: totalDurationSeconds,
         total_commands: totalCommands,
         total_file_changes: totalFileChanges,
+        total_claude_prompts: totalClaudePrompts,
+        total_claude_tool_calls: totalClaudeToolCalls,
       };
+    },
+  );
+
+  // ── GET /api/sessions/:sessionId/claude-transcripts ──────────────────────
+  // Returns Claude transcript metadata list.
+
+  fastify.get<{
+    Params: { sessionId: string };
+  }>(
+    '/api/sessions/:sessionId/claude-transcripts',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['sessionId'],
+          properties: {
+            sessionId: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await getOwnedSession(request, reply, sessionManager);
+      if (!session) return;
+
+      const supabase = getSupabaseAdmin();
+
+      const { data: transcripts, error } = await supabase
+        .from('claude_transcripts')
+        .select('id, claude_session_id, total_prompts, total_tool_calls, total_tokens_in, total_tokens_out, collected_at')
+        .eq('session_id', session.id)
+        .order('collected_at', { ascending: true });
+
+      if (error) {
+        return reply.status(500).send({ error: 'Failed to query Claude transcripts' });
+      }
+
+      return { transcripts: transcripts ?? [] };
+    },
+  );
+
+  // ── GET /api/sessions/:sessionId/claude-transcripts/:transcriptId ───────
+  // Returns a single Claude transcript including full JSONL content.
+
+  fastify.get<{
+    Params: { sessionId: string; transcriptId: string };
+  }>(
+    '/api/sessions/:sessionId/claude-transcripts/:transcriptId',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['sessionId', 'transcriptId'],
+          properties: {
+            sessionId: { type: 'string' },
+            transcriptId: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await getOwnedSession(request, reply, sessionManager);
+      if (!session) return;
+
+      const supabase = getSupabaseAdmin();
+
+      const { data: transcript, error } = await supabase
+        .from('claude_transcripts')
+        .select('*')
+        .eq('id', request.params.transcriptId)
+        .eq('session_id', session.id)
+        .single();
+
+      if (error || !transcript) {
+        return reply.status(404).send({ error: 'Transcript not found' });
+      }
+
+      return transcript;
     },
   );
 }

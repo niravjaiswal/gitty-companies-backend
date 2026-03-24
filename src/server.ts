@@ -8,9 +8,9 @@ import { SessionManager } from './services/sessionManager.js';
 import { ActivityCollectorManager } from './services/activityCollectorManager.js';
 import { sandboxRoutes } from './routes/sandbox.js';
 import { activityRoutes } from './routes/activity.js';
+import { assessmentRoutes } from './routes/assessments.js';
 
 const config = loadConfig();
-
 const fastify = Fastify({
   logger: true,
 });
@@ -28,6 +28,9 @@ fastify.register(sandboxRoutes, { sessionManager, sandboxService });
 
 // Register activity monitoring routes
 fastify.register(activityRoutes, { sessionManager });
+
+// Register company/candidate assessment routes
+fastify.register(assessmentRoutes, { sessionManager });
 
 // Health check
 fastify.get('/', async () => {

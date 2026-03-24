@@ -698,12 +698,14 @@ describe('ActivityCollector', () => {
       for (let i = 0; i < 4; i++) {
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce('')
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
         await collector.collectActivity();
       }
 
       // 5th call
       (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')
         .mockResolvedValueOnce('')
         .mockResolvedValueOnce('');
 
@@ -745,6 +747,7 @@ describe('ActivityCollector', () => {
       for (let i = 0; i < 3; i++) {
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce('')
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
         await collector.collectActivity();
       }
@@ -760,11 +763,13 @@ describe('ActivityCollector', () => {
       for (let i = 0; i < 9; i++) {
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce('')
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
         await collector.collectActivity();
       }
 
       (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')
         .mockResolvedValueOnce('')
         .mockResolvedValueOnce('');
 
@@ -789,11 +794,13 @@ describe('ActivityCollector', () => {
       for (let i = 0; i < 4; i++) {
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce('')
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
         await collector.collectActivity();
       }
 
       (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')
         .mockResolvedValueOnce('')
         .mockResolvedValueOnce('');
 
@@ -825,11 +832,13 @@ describe('ActivityCollector', () => {
       for (let i = 0; i < 4; i++) {
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce('')
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
         await collector.collectActivity();
       }
 
       (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')
         .mockResolvedValueOnce('')
         .mockResolvedValueOnce('');
 
@@ -862,11 +871,13 @@ describe('ActivityCollector', () => {
       for (let i = 0; i < 4; i++) {
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce('')
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
         await collector.collectActivity();
       }
 
       (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')
         .mockResolvedValueOnce('')
         .mockResolvedValueOnce('');
 
@@ -902,11 +913,13 @@ describe('ActivityCollector', () => {
         for (let i = 0; i < 4; i++) {
           (sandboxService.readFile as ReturnType<typeof vi.fn>)
             .mockResolvedValueOnce('')
+            .mockResolvedValueOnce('')
             .mockResolvedValueOnce('');
           await collector.collectActivity();
         }
 
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
 
@@ -948,11 +961,13 @@ describe('ActivityCollector', () => {
         for (let i = 0; i < 4; i++) {
           (sandboxService.readFile as ReturnType<typeof vi.fn>)
             .mockResolvedValueOnce('')
+            .mockResolvedValueOnce('')
             .mockResolvedValueOnce('');
           await collector.collectActivity();
         }
 
         (sandboxService.readFile as ReturnType<typeof vi.fn>)
+          .mockResolvedValueOnce('')
           .mockResolvedValueOnce('')
           .mockResolvedValueOnce('');
 
@@ -984,6 +999,236 @@ describe('ActivityCollector', () => {
         );
       });
     }
+  });
+
+  // ── Claude event parsing ─────────────────────────────────────────────
+
+  describe('Claude event parsing (via collectActivity)', () => {
+    beforeEach(() => {
+      mockSessionRow();
+      mockMonitorRunning();
+    });
+
+    it('parses UserPromptSubmit events as claude_prompt', async () => {
+      const claudeLog =
+        '{"timestamp":"2026-03-15T14:23:01Z","hook_event":"UserPromptSubmit","payload":{"prompt":"Write a hello world"}}\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))  // fs-events.log
+        .mockRejectedValueOnce(new Error('not found'))  // command-history.log
+        .mockResolvedValueOnce(claudeLog);               // claude-events.jsonl
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall).toHaveLength(1);
+      expect(insertCall[0]).toMatchObject({
+        session_id: SESSION_ID,
+        event_type: 'claude_prompt',
+        detail: 'Write a hello world',
+        occurred_at: '2026-03-15T14:23:01Z',
+      });
+      expect(insertCall[0].metadata.hook_event).toBe('UserPromptSubmit');
+    });
+
+    it('parses PreToolUse events as claude_tool_use', async () => {
+      const claudeLog =
+        '{"timestamp":"2026-03-15T14:23:02Z","hook_event":"PreToolUse","payload":{"tool_name":"Read","input":{"path":"/foo"}}}\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall[0]).toMatchObject({
+        event_type: 'claude_tool_use',
+        detail: 'Read',
+      });
+    });
+
+    it('parses PostToolUse events as claude_tool_use', async () => {
+      const claudeLog =
+        '{"timestamp":"2026-03-15T14:23:03Z","hook_event":"PostToolUse","payload":{"tool_name":"Write"}}\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall[0]).toMatchObject({
+        event_type: 'claude_tool_use',
+        detail: 'Write',
+      });
+    });
+
+    it('parses Stop events as claude_response', async () => {
+      const claudeLog =
+        '{"timestamp":"2026-03-15T14:23:04Z","hook_event":"Stop","payload":{"last_assistant_message":"I created the file."}}\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall[0]).toMatchObject({
+        event_type: 'claude_response',
+        detail: 'I created the file.',
+      });
+    });
+
+    it('skips unknown hook events', async () => {
+      const claudeLog =
+        '{"timestamp":"2026-03-15T14:23:05Z","hook_event":"UnknownEvent","payload":{}}\n' +
+        '{"timestamp":"2026-03-15T14:23:06Z","hook_event":"UserPromptSubmit","payload":{"prompt":"hello"}}\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall).toHaveLength(1);
+      expect(insertCall[0].event_type).toBe('claude_prompt');
+    });
+
+    it('skips malformed JSONL lines', async () => {
+      const claudeLog =
+        'this is not json\n' +
+        '{"timestamp":"2026-03-15T14:23:06Z","hook_event":"UserPromptSubmit","payload":{"prompt":"valid"}}\n' +
+        '{broken json\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall).toHaveLength(1);
+      expect(insertCall[0].detail).toBe('valid');
+    });
+
+    it('handles empty claude events file gracefully', async () => {
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')   // fs-events.log
+        .mockResolvedValueOnce('')   // command-history.log
+        .mockResolvedValueOnce('');  // claude-events.jsonl
+
+      await collector.collectActivity();
+
+      expect(supabase._chain.insert).not.toHaveBeenCalled();
+    });
+
+    it('handles missing claude events file gracefully', async () => {
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')                        // fs-events.log
+        .mockResolvedValueOnce('')                        // command-history.log
+        .mockRejectedValueOnce(new Error('not found'));   // claude-events.jsonl
+
+      await collector.collectActivity();
+
+      expect(supabase._chain.insert).not.toHaveBeenCalled();
+    });
+
+    it('truncates long prompt details to 1000 characters', async () => {
+      const longPrompt = 'x'.repeat(2000);
+      const claudeLog =
+        `{"timestamp":"2026-03-15T14:23:01Z","hook_event":"UserPromptSubmit","payload":{"prompt":"${longPrompt}"}}\n`;
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall[0].detail.length).toBe(1000);
+    });
+
+    it('tracks claude offset independently', async () => {
+      const claudeLog1 =
+        '{"timestamp":"2026-03-15T14:23:01Z","hook_event":"UserPromptSubmit","payload":{"prompt":"first"}}\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog1);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      let insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall).toHaveLength(1);
+      expect(insertCall[0].detail).toBe('first');
+
+      // Reset mocks
+      supabase._chain.insert.mockClear();
+      supabase.from.mockClear();
+      supabase.from.mockReturnValue(supabase._chain);
+      supabase._chain.select.mockReturnThis();
+      supabase._chain.eq.mockReturnThis();
+      supabase._chain.single.mockResolvedValue({
+        data: { sandbox_id: SANDBOX_ID, status: 'running' },
+        error: null,
+      });
+
+      const claudeLog2 = claudeLog1 +
+        '{"timestamp":"2026-03-15T14:24:00Z","hook_event":"UserPromptSubmit","payload":{"prompt":"second"}}\n';
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(claudeLog2);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      insertCall = supabase._chain.insert.mock.calls[0][0];
+      expect(insertCall).toHaveLength(1);
+      expect(insertCall[0].detail).toBe('second');
+    });
+
+    it('does not deduplicate claude events', async () => {
+      const claudeLog = [
+        '{"timestamp":"2026-03-15T14:23:01.000Z","hook_event":"PreToolUse","payload":{"tool_name":"Read"}}',
+        '{"timestamp":"2026-03-15T14:23:01.100Z","hook_event":"PostToolUse","payload":{"tool_name":"Read"}}',
+      ].join('\n') + '\n';
+
+      (sandboxService.readFile as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce('')
+        .mockResolvedValueOnce('')
+        .mockResolvedValueOnce(claudeLog);
+
+      supabase._chain.insert.mockResolvedValue({ data: null, error: null });
+
+      await collector.collectActivity();
+
+      const insertCall = supabase._chain.insert.mock.calls[0][0];
+      const claudeEvents = insertCall.filter(
+        (e: any) => e.event_type.startsWith('claude_'),
+      );
+      expect(claudeEvents).toHaveLength(2);
+    });
   });
 
   // ── Health check ─────────────────────────────────────────────────────
@@ -1278,6 +1523,9 @@ describe('SubmissionService', () => {
     sessionData?: Record<string, unknown>;
     commandCount?: number;
     fileChangeCount?: number;
+    claudePromptCount?: number;
+    claudeToolCallCount?: number;
+    claudeTranscripts?: Array<{ claudeSessionId: string; content: string }>;
     insertError?: { message: string } | null;
     captureInsert?: (data: any) => void;
   } = {}) {
@@ -1290,7 +1538,14 @@ describe('SubmissionService', () => {
     };
     const commandCount = overrides.commandCount ?? 0;
     const fileChangeCount = overrides.fileChangeCount ?? 0;
+    const claudePromptCount = overrides.claudePromptCount ?? 0;
+    const claudeToolCallCount = overrides.claudeToolCallCount ?? 0;
     const insertError = overrides.insertError ?? null;
+
+    // Mock collectClaudeTranscripts on sandboxService
+    (sandboxService as any).collectClaudeTranscripts = vi.fn().mockResolvedValue(
+      overrides.claudeTranscripts ?? [],
+    );
 
     supabase.from.mockImplementation((table: string) => {
       if (table === 'sessions') {
@@ -1306,10 +1561,17 @@ describe('SubmissionService', () => {
         };
       }
       if (table === 'session_activity') {
+        // The submission service calls this table 4 times (command_run, file changes, claude_prompt, claude_tool_use)
+        // Each call chains: .select().eq(session_id).eq(event_type) or .select().eq(session_id).in(types)
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ count: commandCount }),
+              eq: vi.fn().mockImplementation((_col: string, val: string) => {
+                if (val === 'command_run') return Promise.resolve({ count: commandCount });
+                if (val === 'claude_prompt') return Promise.resolve({ count: claudePromptCount });
+                if (val === 'claude_tool_use') return Promise.resolve({ count: claudeToolCallCount });
+                return Promise.resolve({ count: 0 });
+              }),
               in: vi.fn().mockResolvedValue({ count: fileChangeCount }),
             }),
           }),
@@ -1321,6 +1583,11 @@ describe('SubmissionService', () => {
             if (overrides.captureInsert) overrides.captureInsert(data);
             return Promise.resolve({ data: null, error: insertError });
           }),
+        };
+      }
+      if (table === 'claude_transcripts') {
+        return {
+          insert: vi.fn().mockResolvedValue({ data: null, error: null }),
         };
       }
       return supabase._chain;
@@ -1627,6 +1894,145 @@ describe('SubmissionService', () => {
       const files = (insertedData as any).files;
       expect(files['src/deep/nested/file.ts']).toBe('nested content');
       expect(files['package.json']).toBe('pkg content');
+    });
+  });
+
+  // ── Claude transcript collection & stats ─────────────────────────────
+
+  describe('captureSubmission - Claude transcripts and stats', () => {
+    it('inserts Claude transcripts into claude_transcripts table', async () => {
+      const transcriptContent = [
+        '{"type":"human","content":"write hello world"}',
+        '{"type":"assistant","content":"here it is"}',
+        '{"type":"tool_use","name":"Write","input":{}}',
+        '{"type":"tool_result","content":"done"}',
+      ].join('\n');
+
+      const claudeTranscriptInserts: any[] = [];
+      supabase.from.mockImplementation((table: string) => {
+        if (table === 'sessions') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: SESSION_ID,
+                    sandbox_id: SANDBOX_ID,
+                    user_id: USER_ID,
+                    created_at: new Date(Date.now() - 3600_000).toISOString(),
+                    total_disconnections: 0,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'session_activity') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ count: 0 }),
+                in: vi.fn().mockResolvedValue({ count: 0 }),
+              }),
+            }),
+          };
+        }
+        if (table === 'claude_transcripts') {
+          return {
+            insert: vi.fn().mockImplementation((data: any) => {
+              claudeTranscriptInserts.push(data);
+              return Promise.resolve({ data: null, error: null });
+            }),
+          };
+        }
+        if (table === 'final_submissions') {
+          return {
+            insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }
+        return supabase._chain;
+      });
+
+      (sandboxService as any).collectClaudeTranscripts = vi.fn().mockResolvedValue([
+        { claudeSessionId: 'claude-session-1', content: transcriptContent },
+      ]);
+
+      mockFindCommand([]);
+
+      await service.captureSubmission(SESSION_ID);
+
+      expect(claudeTranscriptInserts).toHaveLength(1);
+      expect(claudeTranscriptInserts[0]).toMatchObject({
+        session_id: SESSION_ID,
+        claude_session_id: 'claude-session-1',
+        total_prompts: 1,
+        total_tool_calls: 2,
+      });
+    });
+
+    it('includes Claude stats in final_submissions', async () => {
+      let insertedData: Record<string, unknown> | null = null;
+
+      setupSubmissionMocks({
+        claudePromptCount: 5,
+        claudeToolCallCount: 10,
+        captureInsert: (data) => { insertedData = data; },
+      });
+
+      mockFindCommand([]);
+
+      await service.captureSubmission(SESSION_ID);
+
+      expect(insertedData).not.toBeNull();
+      expect((insertedData as any).total_claude_prompts).toBe(5);
+      expect((insertedData as any).total_claude_tool_calls).toBe(10);
+    });
+
+    it('uses Math.max of transcript and activity counts', async () => {
+      const transcriptContent = [
+        '{"type":"human","content":"prompt1"}',
+        '{"type":"human","content":"prompt2"}',
+        '{"type":"human","content":"prompt3"}',
+        '{"type":"tool_use","name":"Read","input":{}}',
+        '{"type":"tool_result","content":"ok"}',
+      ].join('\n');
+
+      let insertedData: Record<string, unknown> | null = null;
+
+      setupSubmissionMocks({
+        claudePromptCount: 2,      // activity says 2 prompts
+        claudeToolCallCount: 5,    // activity says 5 tool calls
+        claudeTranscripts: [
+          { claudeSessionId: 'cs-1', content: transcriptContent },
+        ],
+        captureInsert: (data) => { insertedData = data; },
+      });
+
+      mockFindCommand([]);
+
+      await service.captureSubmission(SESSION_ID);
+
+      expect(insertedData).not.toBeNull();
+      // Transcript has 3 prompts > activity 2, so use 3
+      expect((insertedData as any).total_claude_prompts).toBe(3);
+      // Activity has 5 tool calls > transcript 2, so use 5
+      expect((insertedData as any).total_claude_tool_calls).toBe(5);
+    });
+
+    it('handles failed transcript collection gracefully', async () => {
+      setupSubmissionMocks();
+      (sandboxService as any).collectClaudeTranscripts = vi.fn().mockRejectedValue(
+        new Error('sandbox gone'),
+      );
+
+      mockFindCommand([]);
+
+      await service.captureSubmission(SESSION_ID);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to collect Claude transcripts'),
+      );
     });
   });
 });

@@ -302,6 +302,100 @@ export class SandboxService {
   }
 
   /**
+   * Deploys Claude Code hooks configuration into the sandbox.
+   * Writes ~/.claude/settings.json and /tmp/monitor/claude-hook.sh.
+   */
+  async deployClaudeHooks(sandboxId: string): Promise<void> {
+    const sandbox = this.getSandboxOrThrow(sandboxId);
+
+    // Detect home directory
+    const homeResult = await sandbox.runCommand('bash', ['-c', 'echo $HOME']);
+    const homeDir = (await homeResult.stdout()).trim() || '/root';
+
+    // Create ~/.claude directory
+    await sandbox.runCommand('mkdir', ['-p', `${homeDir}/.claude`]);
+
+    // Read and write claude-hooks-settings.json
+    const settingsPath = join(__dirname, '..', 'assets', 'claude-hooks-settings.json');
+    const settingsContent = readFileSync(settingsPath, 'utf-8');
+    await sandbox.writeFiles([
+      { path: `${homeDir}/.claude/settings.json`, content: Buffer.from(settingsContent, 'utf-8') },
+    ]);
+
+    // Read and write claude-hook.sh
+    const hookScriptPath = join(__dirname, '..', 'assets', 'claude-hook.sh');
+    const hookScriptContent = readFileSync(hookScriptPath, 'utf-8');
+    await sandbox.writeFiles([
+      { path: '/tmp/monitor/claude-hook.sh', content: Buffer.from(hookScriptContent, 'utf-8') },
+    ]);
+
+    // Make it executable
+    await sandbox.runCommand('chmod', ['+x', '/tmp/monitor/claude-hook.sh']);
+
+    this.logger.info(`Claude Code hooks deployed in sandbox ${sandboxId}`);
+  }
+
+  /**
+   * Collects Claude Code session transcripts from the sandbox.
+   * Returns an array of { claudeSessionId, content } for each transcript file found.
+   */
+  async collectClaudeTranscripts(
+    sandboxId: string,
+  ): Promise<Array<{ claudeSessionId: string; content: string }>> {
+    const sandbox = this.getSandboxOrThrow(sandboxId);
+
+    try {
+      // Detect home directory
+      const homeResult = await sandbox.runCommand('bash', ['-c', 'echo $HOME']);
+      const homeDir = (await homeResult.stdout()).trim() || '/root';
+
+      // Find all session transcript JSONL files
+      const findResult = await sandbox.runCommand('bash', [
+        '-c',
+        `find ${homeDir}/.claude/projects -name '*.jsonl' -path '*/sessions/*' 2>/dev/null || true`,
+      ]);
+      const findStdout = await findResult.stdout();
+
+      const filePaths = findStdout
+        .split('\n')
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+
+      if (filePaths.length === 0) {
+        return [];
+      }
+
+      const transcripts: Array<{ claudeSessionId: string; content: string }> = [];
+
+      for (const filePath of filePaths) {
+        try {
+          // Extract session ID from filename (e.g., "abc-def-123.jsonl" -> "abc-def-123")
+          const fileName = filePath.split('/').pop() ?? '';
+          const claudeSessionId = fileName.replace('.jsonl', '');
+
+          const buffer = await sandbox.readFileToBuffer({ path: filePath });
+          if (!buffer) continue;
+
+          transcripts.push({
+            claudeSessionId,
+            content: buffer.toString('utf-8'),
+          });
+        } catch {
+          // Skip individual files that can't be read
+        }
+      }
+
+      this.logger.info(
+        `Collected ${transcripts.length} Claude transcript(s) from sandbox ${sandboxId}`,
+      );
+      return transcripts;
+    } catch {
+      this.logger.warn(`Failed to collect Claude transcripts from sandbox ${sandboxId}`);
+      return [];
+    }
+  }
+
+  /**
    * Clones starter code into the sandbox working directory.
    * Call before setupCodeServer so files are visible on IDE open.
    */
