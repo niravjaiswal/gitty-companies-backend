@@ -18,10 +18,19 @@ vi.mock('../../middleware/auth.js', () => ({
     // For the "wrong-user" token, attach a different user id
     if (authHeader === 'Bearer wrong-user-token') {
       request.user = { id: 'other-user-id', email: 'other@test.com' };
+    // For the "company-member" token, attach a company member user
+    } else if (authHeader === 'Bearer company-member-token') {
+      request.user = { id: 'company-member-id', email: 'company@test.com' };
     } else {
       request.user = { id: 'test-user-id', email: 'test@test.com' };
     }
   },
+}));
+
+// Mock the companyAuth utility
+const mockGetCompanyMembership = vi.fn();
+vi.mock('../../utils/companyAuth.js', () => ({
+  getCompanyMembership: (...args: any[]) => mockGetCompanyMembership(...args),
 }));
 
 // Chainable query builder mock helper
@@ -118,6 +127,7 @@ describe('Activity routes', () => {
   beforeEach(() => {
     sessionManager = createMockSessionManager();
     mockSupabaseFrom = vi.fn();
+    mockGetCompanyMembership.mockReset();
   });
 
   afterEach(async () => {
@@ -1091,6 +1101,156 @@ describe('Activity routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Company membership authorization
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('company membership authorization', () => {
+    const COMPANY_ID = 'company-123';
+    const ASSIGNMENT_ID = 'assignment-456';
+
+    it('grants access when user is a member of the company that owns the assignment', async () => {
+      // Session belongs to a different user but has an assignmentId
+      sessionManager = createMockSessionManager(
+        makeSession({ userId: 'candidate-user', assignmentId: ASSIGNMENT_ID }),
+      );
+
+      // Company member requests access
+      mockGetCompanyMembership.mockResolvedValue({ companyId: COMPANY_ID, role: 'admin' });
+
+      // Supabase returns the assignment belonging to the company
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'assessment_assignments') {
+          return createQueryBuilder({ data: { id: ASSIGNMENT_ID }, error: null });
+        }
+        if (table === 'code_snapshots') {
+          return createQueryBuilder({ data: [], error: null });
+        }
+        return createQueryBuilder({ data: [], error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/sessions/${TEST_SESSION_ID}/snapshots`,
+        headers: { authorization: 'Bearer company-member-token' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockGetCompanyMembership).toHaveBeenCalledWith('company-member-id');
+    });
+
+    it('denies access when user belongs to a different company', async () => {
+      sessionManager = createMockSessionManager(
+        makeSession({ userId: 'candidate-user', assignmentId: ASSIGNMENT_ID }),
+      );
+
+      // User is in a company, but assignment doesn't belong to that company
+      mockGetCompanyMembership.mockResolvedValue({ companyId: 'other-company', role: 'member' });
+
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'assessment_assignments') {
+          // No match — assignment doesn't belong to user's company
+          return createQueryBuilder({ data: null, error: null });
+        }
+        return createQueryBuilder({ data: [], error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/sessions/${TEST_SESSION_ID}/snapshots`,
+        headers: { authorization: 'Bearer company-member-token' },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: 'Not authorized for this session' });
+    });
+
+    it('denies access when session has no assignmentId', async () => {
+      // Session without an assignment — company fallback should not fire
+      sessionManager = createMockSessionManager(
+        makeSession({ userId: 'candidate-user', assignmentId: null }),
+      );
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/sessions/${TEST_SESSION_ID}/snapshots`,
+        headers: { authorization: 'Bearer company-member-token' },
+      });
+
+      expect(res.statusCode).toBe(403);
+      // getCompanyMembership should never be called when there's no assignmentId
+      expect(mockGetCompanyMembership).not.toHaveBeenCalled();
+    });
+
+    it('denies access when user has no company membership', async () => {
+      sessionManager = createMockSessionManager(
+        makeSession({ userId: 'candidate-user', assignmentId: ASSIGNMENT_ID }),
+      );
+
+      mockGetCompanyMembership.mockResolvedValue(null);
+
+      app = await buildApp(sessionManager);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/sessions/${TEST_SESSION_ID}/snapshots`,
+        headers: { authorization: 'Bearer company-member-token' },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: 'Not authorized for this session' });
+    });
+
+    it('company auth works across all activity routes', async () => {
+      sessionManager = createMockSessionManager(
+        makeSession({ userId: 'candidate-user', assignmentId: ASSIGNMENT_ID }),
+      );
+
+      mockGetCompanyMembership.mockResolvedValue({ companyId: COMPANY_ID, role: 'owner' });
+
+      mockSupabaseFrom.mockImplementation((table: string) => {
+        if (table === 'assessment_assignments') {
+          return createQueryBuilder({ data: { id: ASSIGNMENT_ID }, error: null });
+        }
+        // Return valid data for every table
+        if (table === 'session_activity') {
+          return createQueryBuilder({ data: [], error: null, count: 0 });
+        }
+        if (table === 'code_snapshots') {
+          return createQueryBuilder({ data: [], error: null });
+        }
+        if (table === 'claude_transcripts') {
+          return createQueryBuilder({ data: [], error: null });
+        }
+        return createQueryBuilder({ data: null, error: null });
+      });
+
+      app = await buildApp(sessionManager);
+
+      const routes = [
+        `/api/sessions/${TEST_SESSION_ID}/activity`,
+        `/api/sessions/${TEST_SESSION_ID}/snapshots`,
+        `/api/sessions/${TEST_SESSION_ID}/timeline`,
+        `/api/sessions/${TEST_SESSION_ID}/claude-transcripts`,
+      ];
+
+      for (const url of routes) {
+        const res = await app.inject({
+          method: 'GET',
+          url,
+          headers: { authorization: 'Bearer company-member-token' },
+        });
+        expect(res.statusCode, `Expected 200 for ${url}`).toBe(200);
+      }
     });
   });
 });

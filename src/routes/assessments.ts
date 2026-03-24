@@ -2,31 +2,11 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { authenticate } from '../middleware/auth.js';
 import { getSupabaseAdmin } from '../db/supabase.js';
 import { normalizeEmail } from '../utils/email.js';
+import { getCompanyMembership } from '../utils/companyAuth.js';
 import type { SessionManager } from '../services/sessionManager.js';
 
 interface AssessmentRouteOptions extends FastifyPluginOptions {
   sessionManager: SessionManager;
-}
-
-interface CompanyMembership {
-  companyId: string;
-  role: 'owner' | 'admin' | 'member';
-}
-
-async function getCompanyMembership(userId: string): Promise<CompanyMembership | null> {
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('company_members')
-    .select('company_id, role')
-    .eq('user_id', userId)
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return {
-    companyId: data.company_id as string,
-    role: data.role as CompanyMembership['role'],
-  };
 }
 
 async function claimAssignmentsForUser(userId: string, email: string): Promise<void> {
@@ -447,15 +427,63 @@ export async function assessmentRoutes(
         return reply.status(500).send({ error: 'Failed to fetch assignments' });
       }
 
-      return (assignments ?? []).map((assignment) => ({
-        id: assignment.id,
-        candidateEmail: assignment.candidate_email,
-        status: assignment.status,
-        claimedAt: assignment.claimed_at,
-        startedAt: assignment.started_at,
-        completedAt: assignment.completed_at,
-        createdAt: assignment.created_at,
-      }));
+      const assignmentIds = (assignments ?? []).map((a) => a.id as string);
+
+      // Batch-fetch sessions for all assignments
+      let sessionByAssignment = new Map<string, any>();
+      let submissionBySession = new Map<string, any>();
+
+      if (assignmentIds.length > 0) {
+        const { data: sessions } = await supabase
+          .from('sessions')
+          .select('id, assignment_id, status')
+          .in('assignment_id', assignmentIds);
+
+        sessionByAssignment = new Map(
+          (sessions ?? []).map((s) => [s.assignment_id as string, s]),
+        );
+
+        const sessionIds = (sessions ?? []).map((s) => s.id as string);
+        if (sessionIds.length > 0) {
+          const { data: subs } = await supabase
+            .from('final_submissions')
+            .select('session_id, total_commands_run, total_file_changes, session_duration_seconds, total_disconnections, total_claude_prompts, total_claude_tool_calls, submitted_at')
+            .in('session_id', sessionIds);
+          submissionBySession = new Map(
+            (subs ?? []).map((s) => [s.session_id as string, s]),
+          );
+        }
+      }
+
+      return (assignments ?? []).map((assignment) => {
+        const session = sessionByAssignment.get(assignment.id as string);
+        const submission = session
+          ? submissionBySession.get(session.id as string)
+          : null;
+
+        return {
+          id: assignment.id,
+          candidateEmail: assignment.candidate_email,
+          status: assignment.status,
+          claimedAt: assignment.claimed_at,
+          startedAt: assignment.started_at,
+          completedAt: assignment.completed_at,
+          createdAt: assignment.created_at,
+          sessionId: session ? (session.id as string) : null,
+          sessionStatus: session ? (session.status as string) : null,
+          submission: submission
+            ? {
+                totalCommandsRun: submission.total_commands_run,
+                totalFileChanges: submission.total_file_changes,
+                sessionDurationSeconds: submission.session_duration_seconds,
+                totalDisconnections: submission.total_disconnections,
+                totalClaudePrompts: submission.total_claude_prompts,
+                totalClaudeToolCalls: submission.total_claude_tool_calls,
+                submittedAt: submission.submitted_at,
+              }
+            : null,
+        };
+      });
     },
   );
 

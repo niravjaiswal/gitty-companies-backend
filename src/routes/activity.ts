@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyRepl
 import type { SessionManager } from '../services/sessionManager.js';
 import { authenticate } from '../middleware/auth.js';
 import { getSupabaseAdmin } from '../db/supabase.js';
+import { getCompanyMembership } from '../utils/companyAuth.js';
 
 interface ActivityRouteOptions extends FastifyPluginOptions {
   sessionManager: SessionManager;
@@ -11,6 +12,10 @@ interface ActivityRouteOptions extends FastifyPluginOptions {
  * Helper: fetch session and verify ownership.
  * Unlike getOwnedRunningSession in sandbox.ts, this does NOT require 'running' status —
  * activity data should be viewable even after a session ends.
+ *
+ * Authorization paths:
+ * 1. Direct ownership: session.userId matches the requesting user
+ * 2. Company membership: the session's assignment belongs to the requesting user's company
  */
 async function getOwnedSession(
   request: FastifyRequest<{ Params: { sessionId: string } }>,
@@ -22,11 +27,27 @@ async function getOwnedSession(
     reply.status(404).send({ error: 'Session not found' });
     return null;
   }
-  if (session.userId !== request.user.id) {
-    reply.status(403).send({ error: 'Not authorized for this session' });
-    return null;
+
+  // Direct ownership
+  if (session.userId === request.user.id) return session;
+
+  // Company membership: session's assignment belongs to user's company
+  if (session.assignmentId) {
+    const membership = await getCompanyMembership(request.user.id);
+    if (membership) {
+      const supabase = getSupabaseAdmin();
+      const { data } = await supabase
+        .from('assessment_assignments')
+        .select('id')
+        .eq('id', session.assignmentId)
+        .eq('company_id', membership.companyId)
+        .maybeSingle();
+      if (data) return session;
+    }
   }
-  return session;
+
+  reply.status(403).send({ error: 'Not authorized for this session' });
+  return null;
 }
 
 /**
