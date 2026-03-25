@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { extractSpec } from "../../src/stage1/extract-spec.js";
-import { AssessmentSpecSchema } from "../../src/stage1/spec-schema.js";
+import { extractSpec } from "../../src/pipeline/stage1/extract-spec.js";
+import { AssessmentSpecSchema } from "../../src/pipeline/stage1/spec-schema.js";
 import { fixtures } from "./fixtures.js";
 
 describe("extractSpec", () => {

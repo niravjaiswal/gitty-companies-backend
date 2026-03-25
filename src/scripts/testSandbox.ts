@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { SandboxService, type Logger } from '../services/sandbox.js';
+import { SandboxService, type Logger } from '../app/external/vercelSandbox/sandbox.js';
 
 const logger: Logger = {
   info: (msg: string) => console.log(`[INFO]  ${msg}`),

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { designScenario } from "../../src/stage2/design-scenario.js";
-import { ScenarioDesignSchema } from "../../src/stage2/scenario-schema.js";
-import { validateCoherence } from "../../src/stage2/validate-coherence.js";
+import { designScenario } from "../../src/pipeline/stage2/design-scenario.js";
+import { ScenarioDesignSchema } from "../../src/pipeline/stage2/scenario-schema.js";
+import { validateCoherence } from "../../src/pipeline/stage2/validate-coherence.js";
 import { fixtures } from "./fixtures.js";
 
 describe("designScenario", () => {
