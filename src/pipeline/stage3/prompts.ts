@@ -10,6 +10,7 @@ export const STAGE3_SYSTEM_PROMPT = `You are a senior software engineer generati
 - Handle errors gracefully — no swallowed exceptions, no bare \`catch {}\`.
 - Do not add comments explaining obvious code. Only comment where intent is non-obvious.
 - Do not include dead code, unused imports, or placeholder comments like "// Add more here".
+- ONLY import local files explicitly listed in the "ALLOWED LOCAL IMPORTS" section. Do not invent or assume additional local files exist.
 
 ## Mode-Specific Rules
 
@@ -55,6 +56,23 @@ These types will be imported by other files in the project. Make them thorough a
 
 All exports from this file: {exports}`;
 
+export const SECONDARY_TYPES_FILE_USER_PROMPT_TEMPLATE = `Generate the types file at path: {file_path}
+
+Purpose: {purpose}
+
+Project: {project_title}
+Runtime: {runtime}
+Framework: {framework}
+
+Narrative: {narrative_oneliner}
+
+This file must export: {exports}
+
+ALREADY DEFINED TYPES (in {primary_types_path} and other type files):
+{existing_types}
+
+CRITICAL: The types listed above are already defined elsewhere in this project. You MUST import any types you need from "{primary_types_import_path}" — do NOT redeclare, copy, or create local versions of any type that already exists above. Only define NEW types that are specific to this file's purpose and not already covered.`;
+
 export const CONFIG_FILE_USER_PROMPT_TEMPLATE = `Generate the configuration file at path: {config_path}
 
 Purpose: {config_purpose}
@@ -79,15 +97,22 @@ Project context:
 - Framework: {framework}
 - Narrative: {narrative_oneliner}
 
-Shared type definitions:
+Shared type definitions (import these — DO NOT redeclare or redefine any of them):
 {type_definitions}
+
+IMPORTANT: All types and interfaces shown above are already defined in the project's types file. Import them from the types file — never copy, redeclare, or create local versions of these types.
 
 This file must export: {exports}
 
-Dependencies (files this imports from and their exports):
-{dependency_details_with_their_exports}
+ALLOWED LOCAL IMPORTS (relative paths from this file):
+{allowed_local_imports}
 
-Available packages: {packages}
+ALLOWED EXTERNAL PACKAGES: {packages}
+
+CRITICAL: Do NOT import or require any local files other than those listed above. No other local files exist in this project. Only use the listed external packages.
+
+PROJECT FILE MANIFEST (for architectural awareness — shows all files, their role, and whether they are provided, candidate, or partial):
+{manifest_summary}
 
 {task_details}`;
 

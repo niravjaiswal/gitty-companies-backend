@@ -2,6 +2,7 @@ import type { ScenarioDesign } from "../stage2/scenario-schema.js";
 import type { CompressedContext } from "./build-context.js";
 import {
   TYPES_FILE_USER_PROMPT_TEMPLATE,
+  SECONDARY_TYPES_FILE_USER_PROMPT_TEMPLATE,
   CONFIG_FILE_USER_PROMPT_TEMPLATE,
   SOURCE_FILE_USER_PROMPT_TEMPLATE,
   README_USER_PROMPT_TEMPLATE,
@@ -10,6 +11,38 @@ import {
 
 type ManifestFile = ScenarioDesign["starter_repo"]["manifest"][number];
 type CandidateTask = ScenarioDesign["candidate_tasks"][number];
+
+export function computeRelativeImportPath(fromFile: string, toFile: string): string {
+  const fromDir = fromFile.includes("/") ? fromFile.substring(0, fromFile.lastIndexOf("/")) : ".";
+  const toDir = toFile.includes("/") ? toFile.substring(0, toFile.lastIndexOf("/")) : ".";
+  const toBasename = toFile.includes("/") ? toFile.substring(toFile.lastIndexOf("/") + 1) : toFile;
+
+  // Strip extension from the basename
+  const toName = toBasename.replace(/\.[jt]sx?$/, "");
+
+  if (fromDir === toDir) {
+    return `./${toName}`;
+  }
+
+  const fromParts = fromDir === "." ? [] : fromDir.split("/");
+  const toParts = toDir === "." ? [] : toDir.split("/");
+
+  // Find common prefix length
+  let common = 0;
+  while (common < fromParts.length && common < toParts.length && fromParts[common] === toParts[common]) {
+    common++;
+  }
+
+  const ups = fromParts.length - common;
+  const downs = toParts.slice(common);
+
+  if (ups === 0) {
+    return "./" + [...downs, toName].join("/");
+  }
+
+  const segments = [...Array(ups).fill(".."), ...downs, toName];
+  return segments.join("/");
+}
 
 export function buildTypesFilePrompt(
   context: Omit<CompressedContext, "type_definitions">,
@@ -27,6 +60,27 @@ export function buildTypesFilePrompt(
     .replaceAll("{narrative_oneliner}", context.narrative_oneliner)
     .replaceAll("{types_list}", typesList)
     .replaceAll("{exports}", exports);
+}
+
+export function buildSecondaryTypesFilePrompt(
+  context: Omit<CompressedContext, "type_definitions">,
+  entry: ManifestFile,
+  primaryTypesPath: string,
+  existingTypes: string,
+): string {
+  const primaryImportPath = computeRelativeImportPath(entry.path, primaryTypesPath);
+
+  return SECONDARY_TYPES_FILE_USER_PROMPT_TEMPLATE
+    .replaceAll("{file_path}", entry.path)
+    .replaceAll("{purpose}", entry.purpose)
+    .replaceAll("{project_title}", context.project_title)
+    .replaceAll("{runtime}", context.runtime)
+    .replaceAll("{framework}", context.framework ?? "none")
+    .replaceAll("{narrative_oneliner}", context.narrative_oneliner)
+    .replaceAll("{exports}", entry.exports.join(", "))
+    .replaceAll("{primary_types_path}", primaryTypesPath)
+    .replaceAll("{primary_types_import_path}", primaryImportPath)
+    .replaceAll("{existing_types}", existingTypes);
 }
 
 export function buildConfigFilePrompt(
@@ -52,21 +106,47 @@ export function buildSourceFilePrompt(
   candidateTasks: CandidateTask[],
   packages: string[],
 ): string {
-  const depDetails = manifest.dependencies
-    .map((dep) => {
-      const exports = context.all_exports[dep];
-      if (exports) {
-        return `  ${dep}: exports [${exports.join(", ")}]`;
-      }
-      return `  ${dep}: (external)`;
-    })
-    .join("\n");
+  // Split dependencies into local (in manifest) vs external
+  const localImportLines: string[] = [];
+  const externalDeps: string[] = [];
+
+  for (const dep of manifest.dependencies) {
+    const exports = context.all_exports[dep];
+    if (exports) {
+      const relativePath = computeRelativeImportPath(manifest.path, dep);
+      localImportLines.push(`From "${relativePath}" you may import: ${exports.join(", ")}`);
+    } else if (!dep.startsWith(".") && !dep.startsWith("/")) {
+      externalDeps.push(dep);
+    }
+  }
+
+  const allowedLocalImports = localImportLines.length > 0
+    ? localImportLines.join("\n")
+    : "(none — this file has no local dependencies)";
 
   let modeSection = "";
   let taskDetails = "";
 
   if (manifest.provided_or_candidate === "provided") {
     modeSection = "This is a PROVIDED file. Write a complete, fully working implementation. No TODOs, no stubs.";
+
+    // Detect server/app entry point files and add structural requirements
+    const basename = manifest.path.split("/").pop() ?? "";
+    const isServerEntryPoint = /^(server|app|index)\.[jt]sx?$/.test(basename);
+    if (isServerEntryPoint) {
+      // Find route/router files in allowed local imports
+      const routeImports = localImportLines.filter(
+        (line) => /route|router|controller|endpoint/i.test(line),
+      );
+      modeSection += `
+
+CRITICAL STRUCTURAL REQUIREMENTS for this server entry-point file:
+1. You MUST import and mount (app.use()) ALL route/router files from the allowed local imports.${routeImports.length > 0 ? "\n   Route files to mount: " + routeImports.map(l => l.split('"')[1]).filter(Boolean).join(", ") : ""}
+2. You MUST call app.listen() (or equivalent) at the bottom of the file so the server actually starts. Use a PORT variable from process.env with a sensible default (e.g., 3000).
+3. You MUST export the app instance so tests can use it with supertest.
+4. Middleware ordering: body parsing → CORS/helmet → route mounting → 404 catch-all → error handler.
+5. The 404 handler must come AFTER all routes but BEFORE the error-handling middleware.`;
+    }
   } else if (manifest.provided_or_candidate === "candidate") {
     modeSection = "This is a CANDIDATE file. Write ONLY the skeleton: imports, type signatures, and exported function/class shells with TODO comments in each body. Do NOT include any implementation logic.";
     const matchingTasks = candidateTasks.filter((t) =>
@@ -102,8 +182,9 @@ export function buildSourceFilePrompt(
     .replaceAll("{narrative_oneliner}", context.narrative_oneliner)
     .replaceAll("{type_definitions}", context.type_definitions)
     .replaceAll("{exports}", manifest.exports.join(", "))
-    .replaceAll("{dependency_details_with_their_exports}", depDetails || "  (none)")
+    .replaceAll("{allowed_local_imports}", allowedLocalImports)
     .replaceAll("{packages}", packages.join(", ") || "(none)")
+    .replaceAll("{manifest_summary}", context.manifest_summary ?? "(not available)")
     .replaceAll("{task_details}", taskDetails);
 }
 

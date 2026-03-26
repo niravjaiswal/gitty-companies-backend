@@ -8,6 +8,8 @@ export interface CompressedContext {
   narrative_oneliner: string;
   all_exports: Record<string, string[]>;
   type_definitions: string;
+  /** One-line-per-file manifest summary: "path (provision): purpose" */
+  manifest_summary: string;
 }
 
 export function buildCompressedContext(
@@ -23,12 +25,17 @@ export function buildCompressedContext(
   const firstSentence = narrative.split(". ")[0];
   const narrativeOneliner = firstSentence.endsWith(".") ? firstSentence : firstSentence + ".";
 
+  const manifestSummary = scenario.starter_repo.manifest
+    .map((m) => `- ${m.path} (${m.provided_or_candidate}): ${m.purpose}`)
+    .join("\n");
+
   return {
     project_title: scenario.scenario.title,
     runtime: spec.runtime ?? "node",
     framework: spec.framework,
     narrative_oneliner: narrativeOneliner,
     all_exports: allExports,
+    manifest_summary: manifestSummary,
   };
 }
 

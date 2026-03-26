@@ -26,7 +26,7 @@ describe("designScenario", () => {
             JSON.stringify(result, null, 2),
           );
         },
-        120_000,
+        180_000,
       );
 
       it("should pass all coherence checks", () => {

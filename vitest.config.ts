@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
         concurrent: false,
       },
       globals: false,
-      exclude: ["dist/**", "node_modules/**"],
+      exclude: ["dist/**", "node_modules/**", "output/**"],
       env,
     },
   };

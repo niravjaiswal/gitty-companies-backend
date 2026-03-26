@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   stripMarkdownFences,
   validateGeneratedFile,
+  scrubInvalidImports,
 } from "../validate-file.js";
 
 type ManifestFile = {
@@ -273,5 +274,128 @@ describe("validateGeneratedFile", () => {
     );
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
+  });
+
+  it("invalid CJS require paths detected", () => {
+    const manifest = makeManifest({
+      path: "src/index.ts",
+    });
+    const content =
+      'const routes = require("./nonexistent");\nexport const x = 1;';
+    const result = validateGeneratedFile(
+      "src/index.ts",
+      content,
+      manifest,
+      defaultPaths,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatch(/Require "\.\/nonexistent"/);
+    expect(result.errors[0]).toMatch(/not in the manifest/);
+  });
+
+  it("valid CJS require paths pass", () => {
+    const manifest = makeManifest({
+      path: "src/index.ts",
+    });
+    const content =
+      'const utils = require("./utils");\nexport const x = 1;';
+    const result = validateGeneratedFile(
+      "src/index.ts",
+      content,
+      manifest,
+      defaultPaths,
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it("external CJS requires are allowed", () => {
+    const manifest = makeManifest({
+      path: "src/index.ts",
+    });
+    const content =
+      'const express = require("express");\nexport const app = express();';
+    const result = validateGeneratedFile(
+      "src/index.ts",
+      content,
+      manifest,
+      defaultPaths,
+    );
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// scrubInvalidImports
+// ---------------------------------------------------------------------------
+
+describe("scrubInvalidImports", () => {
+  const manifestPaths = new Set(["src/utils.ts", "src/index.ts", "src/db.ts"]);
+
+  it("removes CJS require of non-manifest local file", () => {
+    const content = 'const x = require("./nonexistent");\nconst y = 1;';
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe("const y = 1;");
+    expect(result.removedImports).toEqual(["./nonexistent"]);
+  });
+
+  it("removes ESM import of non-manifest local file", () => {
+    const content = 'import { X } from "./nonexistent";\nconst y = 1;';
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe("const y = 1;");
+    expect(result.removedImports).toEqual(["./nonexistent"]);
+  });
+
+  it("removes multi-line ESM import of non-manifest local file", () => {
+    const content = [
+      'import {',
+      '  Foo,',
+      '  Bar,',
+      '} from "./nonexistent";',
+      'const y = 1;',
+    ].join("\n");
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe("const y = 1;");
+    expect(result.removedImports).toEqual(["./nonexistent"]);
+  });
+
+  it("removes side-effect import of non-manifest local file", () => {
+    const content = 'import "./nonexistent";\nconst y = 1;';
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe("const y = 1;");
+    expect(result.removedImports).toEqual(["./nonexistent"]);
+  });
+
+  it("preserves valid local imports", () => {
+    const content = 'import { getDb } from "./db";\nconst y = 1;';
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe('import { getDb } from "./db";\nconst y = 1;');
+    expect(result.removedImports).toEqual([]);
+  });
+
+  it("preserves external imports", () => {
+    const content = 'import express from "express";\nconst app = express();';
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe(content);
+    expect(result.removedImports).toEqual([]);
+  });
+
+  it("preserves external CJS requires", () => {
+    const content = 'const express = require("express");\nconst app = express();';
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe(content);
+    expect(result.removedImports).toEqual([]);
+  });
+
+  it("returns correct removedImports array for multiple scrubbed imports", () => {
+    const content = [
+      'import { X } from "./nonexistent";',
+      'const routes = require("./fake-routes");',
+      'import { getDb } from "./db";',
+      'const y = 1;',
+    ].join("\n");
+    const result = scrubInvalidImports("src/index.ts", content, manifestPaths);
+    expect(result.content).toBe('import { getDb } from "./db";\nconst y = 1;');
+    expect(result.removedImports).toEqual(["./nonexistent", "./fake-routes"]);
   });
 });

@@ -7,6 +7,7 @@ import {
   buildSourceFilePrompt,
   buildReadmePrompt,
   buildRepairPrompt,
+  computeRelativeImportPath,
 } from "../build-prompt.js";
 
 // ---------------------------------------------------------------------------
@@ -147,6 +148,7 @@ function makeCompressedContext(
     },
     type_definitions:
       "export interface Task { id: string; title: string; status: string; }\nexport interface Project { id: string; name: string; }\nexport interface User { id: string; email: string; }",
+    manifest_summary: "- src/types.ts (provided): Shared type definitions\n- src/db.ts (provided): Database connection\n- src/routes.ts (candidate): Task routes\n- src/middleware.ts (provided): Auth middleware",
     ...overrides,
   };
 }
@@ -382,7 +384,7 @@ describe("buildSourceFilePrompt", () => {
     expect(result).toContain("Rejects requests with missing required fields");
   });
 
-  it("includes dependency details with their exports for local deps", () => {
+  it("includes prescriptive allowed local imports with relative paths", () => {
     const manifest = scenario.starter_repo.manifest[2]; // src/routes.ts
     const result = buildSourceFilePrompt(
       manifest,
@@ -391,12 +393,13 @@ describe("buildSourceFilePrompt", () => {
       ["express", "pg"],
     );
 
-    // src/types.ts is a local dep with known exports
-    expect(result).toContain("src/types.ts: exports [Task, Project, User]");
-    // src/db.ts is a local dep with known exports
-    expect(result).toContain("src/db.ts: exports [getDb, query]");
-    // express is an external dep
-    expect(result).toContain("express: (external)");
+    // src/types.ts from src/routes.ts = "./types"
+    expect(result).toContain('From "./types" you may import: Task, Project, User');
+    // src/db.ts from src/routes.ts = "./db"
+    expect(result).toContain('From "./db" you may import: getDb, query');
+    // express should not appear in allowed local imports section
+    expect(result).toContain("ALLOWED LOCAL IMPORTS");
+    expect(result).toContain("CRITICAL: Do NOT import or require any local files");
   });
 
   it("includes type definitions from context", () => {
@@ -421,7 +424,7 @@ describe("buildSourceFilePrompt", () => {
       ["express"],
     );
 
-    expect(result).toContain("(none)");
+    expect(result).toContain("(none — this file has no local dependencies)");
   });
 
   it("includes project context fields", () => {
@@ -451,7 +454,7 @@ describe("buildSourceFilePrompt", () => {
     expect(result).toContain("Framework: none");
   });
 
-  it("includes available packages", () => {
+  it("includes available packages in ALLOWED EXTERNAL PACKAGES", () => {
     const manifest = scenario.starter_repo.manifest[2];
     const result = buildSourceFilePrompt(
       manifest,
@@ -460,7 +463,7 @@ describe("buildSourceFilePrompt", () => {
       ["express", "pg", "dotenv"],
     );
 
-    expect(result).toContain("express, pg, dotenv");
+    expect(result).toContain("ALLOWED EXTERNAL PACKAGES: express, pg, dotenv");
   });
 
   it("shows '(none)' when packages list is empty", () => {
@@ -601,5 +604,31 @@ describe("buildRepairPrompt", () => {
     );
 
     expect(result).toContain("```\nconsole.log('hi');\n```");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeRelativeImportPath
+// ---------------------------------------------------------------------------
+
+describe("computeRelativeImportPath", () => {
+  it("same directory", () => {
+    expect(computeRelativeImportPath("src/server.js", "src/types.ts")).toBe("./types");
+  });
+
+  it("subdirectory", () => {
+    expect(computeRelativeImportPath("src/server.js", "src/routes/products.js")).toBe("./routes/products");
+  });
+
+  it("parent directory", () => {
+    expect(computeRelativeImportPath("src/routes/products.js", "src/types.ts")).toBe("../types");
+  });
+
+  it("sibling directory", () => {
+    expect(computeRelativeImportPath("src/routes/products.js", "src/db/connection.js")).toBe("../db/connection");
+  });
+
+  it("root-level to nested", () => {
+    expect(computeRelativeImportPath("index.js", "src/types.ts")).toBe("./src/types");
   });
 });

@@ -11,7 +11,7 @@ import { STAGE2_SYSTEM_PROMPT, buildStage2UserPrompt } from "./prompts.js";
 import { validateCoherence } from "./validate-coherence.js";
 
 const SONNET_MODEL = "claude-sonnet-4-20250514";
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 8192;
 
 export async function designScenario(
   spec: AssessmentSpec,
@@ -45,7 +45,7 @@ export async function designScenario(
       {
         role: "user",
         content:
-          "Your previous response was not valid JSON. Respond with ONLY a JSON object.",
+          "Your previous response was not valid JSON or did not match the required schema. The JSON must have these exact top-level keys: scenario, starter_repo, candidate_tasks, evaluation_rubric, readme_structure. Respond with ONLY the corrected JSON object.",
       },
     );
     result = await callLlm(config);

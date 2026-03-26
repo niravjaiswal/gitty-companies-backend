@@ -136,5 +136,26 @@ export function validateCoherence(
     }
   }
 
+  // 9. Server/app entry-point files must depend on all route files
+  const serverEntry = design.starter_repo.manifest.find((f) => {
+    const basename = f.path.split("/").pop() ?? "";
+    return /^(server|app|index)\.[jt]sx?$/.test(basename);
+  });
+  if (serverEntry) {
+    const routeFiles = design.starter_repo.manifest.filter(
+      (f) =>
+        f.path !== serverEntry.path &&
+        (/route|router/i.test(f.path) || (/route|router/i.test(f.purpose) && !f.purpose.toLowerCase().includes("mounting"))),
+    );
+    const serverDeps = new Set(serverEntry.dependencies);
+    for (const rf of routeFiles) {
+      if (!serverDeps.has(rf.path)) {
+        errors.push(
+          `Server entry-point "${serverEntry.path}" must list route file "${rf.path}" in its dependencies so it can import and mount the router`,
+        );
+      }
+    }
+  }
+
   return { valid: errors.length === 0, errors };
 }
