@@ -3,6 +3,11 @@ import { SandboxService, type Logger } from '../../external/vercelSandbox/sandbo
 import type { ActivityCollectorManager } from '../activity/activityCollectorManager.js';
 import { SubmissionService } from '../submissions/submissionService.js';
 import { loadConfig } from '../../infra/config/index.js';
+import {
+  AssessmentWorkspaceService,
+  normalizeAuthoringConfig,
+  normalizeStoredWorkspace,
+} from '../assessments/assessmentWorkspace.js';
 
 export type SessionStatus =
   | 'starting'
@@ -57,6 +62,7 @@ export class SessionManager {
   private logger: Logger;
   private collectorManager: ActivityCollectorManager;
   private submissionService: SubmissionService;
+  private workspaceService: AssessmentWorkspaceService;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -64,11 +70,13 @@ export class SessionManager {
     sandboxService: SandboxService,
     logger: Logger,
     collectorManager: ActivityCollectorManager,
+    workspaceService: AssessmentWorkspaceService,
   ) {
     this.supabase = supabase;
     this.sandboxService = sandboxService;
     this.logger = logger;
     this.collectorManager = collectorManager;
+    this.workspaceService = workspaceService;
     this.submissionService = new SubmissionService(supabase, sandboxService, logger);
   }
 
@@ -134,12 +142,20 @@ export class SessionManager {
     });
     this.logger.info(`Session starting: ${sessionRow.id} for user ${userId}, assignment ${assignmentId}`);
 
+    const workspace = await this.ensureAssessmentWorkspaceGenerated(assignment.assessment_id as string);
+
     try {
       const config = loadConfig();
       const { id: sandboxId } = await this.sandboxService.createSandbox({
         snapshotId: config.vercelSandboxSnapshotId || undefined,
       });
-      const { url: codeServerUrl } = await this.sandboxService.setupCodeServer(sandboxId);
+      if (Object.keys(workspace.files).length > 0) {
+        await this.sandboxService.seedAssessmentFiles(sandboxId, workspace.files);
+      }
+
+      const { url: codeServerUrl } = await this.sandboxService.setupCodeServer(sandboxId, {
+        entryFilePath: workspace.entryFilePath || undefined,
+      });
       await this.sandboxService.startMonitor(sandboxId);
 
       try {
@@ -257,6 +273,75 @@ export class SessionManager {
 
     await this.logEvent(sessionId, 'disconnected');
     this.logger.info(`Session disconnected: ${sessionId} (grace period started)`);
+  }
+
+  private async ensureAssessmentWorkspaceGenerated(assessmentId: string) {
+    const { data: assessmentRow, error } = await this.supabase
+      .from('assessments')
+      .select(
+        [
+          'id',
+          'title',
+          'summary',
+          'instructions_md',
+          'source_brief',
+          'authoring_config',
+          'workspace_files',
+          'workspace_entry_file',
+          'workspace_generated_at',
+        ].join(', '),
+      )
+      .eq('id', assessmentId)
+      .single();
+
+    if (error || !assessmentRow) {
+      throw new Error(`Assessment ${assessmentId} not found while preparing workspace`);
+    }
+
+    const assessment = assessmentRow as unknown as Record<string, unknown>;
+
+    const existingWorkspace = normalizeStoredWorkspace(
+      assessment.workspace_files,
+      assessment.workspace_entry_file,
+      assessment.workspace_generated_at,
+    );
+
+    if (Object.keys(existingWorkspace.files).length > 0) {
+      return existingWorkspace;
+    }
+
+    this.logger.info(`Generating missing workspace for assessment ${assessmentId} on session start`);
+
+    const generatedWorkspace = await this.workspaceService.generate({
+      title: (assessment.title as string) ?? 'Technical Assessment',
+      summary: (assessment.summary as string) ?? '',
+      instructionsMd: (assessment.instructions_md as string) ?? '',
+      sourceBrief: (assessment.source_brief as string) ?? '',
+      authoringConfig: normalizeAuthoringConfig(assessment.authoring_config),
+    });
+
+    const { data: updatedAssessmentRow, error: updateError } = await this.supabase
+      .from('assessments')
+      .update({
+        workspace_files: generatedWorkspace.files,
+        workspace_entry_file: generatedWorkspace.entryFilePath,
+        workspace_generated_at: generatedWorkspace.generatedAt,
+      })
+      .eq('id', assessmentId)
+      .select('workspace_files, workspace_entry_file, workspace_generated_at')
+      .single();
+
+    if (updateError || !updatedAssessmentRow) {
+      throw new Error(`Failed to persist generated workspace for assessment ${assessmentId}`);
+    }
+
+    const updatedAssessment = updatedAssessmentRow as unknown as Record<string, unknown>;
+
+    return normalizeStoredWorkspace(
+      updatedAssessment.workspace_files,
+      updatedAssessment.workspace_entry_file,
+      updatedAssessment.workspace_generated_at,
+    );
   }
 
   async reconnectSession(sessionId: string): Promise<Session | null> {

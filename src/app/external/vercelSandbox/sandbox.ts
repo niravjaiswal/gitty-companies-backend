@@ -1,13 +1,12 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, posix } from 'path';
 import { Sandbox } from '@vercel/sandbox';
 import { loadConfig } from '../../infra/config/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SANDBOX_ROOT = '/vercel/sandbox';
-const ASSESSMENT_ROOT = `${SANDBOX_ROOT}/assessment`;
 const CODE_SERVER_VERSION = '4.101.2';
 const CODE_SERVER_TARBALL_NAME = `code-server-${CODE_SERVER_VERSION}-linux-amd64`;
 const CODE_SERVER_TARBALL_URL =
@@ -233,11 +232,28 @@ export class SandboxService {
    * Downloads, configures, and starts code-server inside the sandbox.
    * Polls until code-server is ready, then returns its public URL.
    */
-  async setupCodeServer(sandboxId: string): Promise<{ url: string }> {
+  async setupCodeServer(
+    sandboxId: string,
+    options?: { entryFilePath?: string },
+  ): Promise<{ url: string }> {
     const sandbox = this.getSandboxOrThrow(sandboxId);
     const paths = await this.resolveCodeServerPaths(sandboxId);
-    await this.ensureAssessmentWorkspace(sandboxId);
+    const assessmentRoot = await this.ensureAssessmentWorkspace(sandboxId);
     await this.ensureCodeServerInstalled(sandboxId, paths);
+
+    const launchTargets = [assessmentRoot];
+    const entryFilePath = options?.entryFilePath?.trim() ?? '';
+    const normalizedEntryFilePath = entryFilePath
+      ? posix.normalize(entryFilePath).replace(/^(\.\/)+/, '')
+      : '';
+    if (
+      normalizedEntryFilePath &&
+      normalizedEntryFilePath !== '.' &&
+      !normalizedEntryFilePath.startsWith('/') &&
+      !normalizedEntryFilePath.startsWith('../')
+    ) {
+      launchTargets.push(posix.join(assessmentRoot, normalizedEntryFilePath));
+    }
 
     // Step 2: Start code-server detached (pass all config via CLI args)
     this.logger.info(`Starting code-server in sandbox ${sandboxId}...`);
@@ -249,7 +265,7 @@ export class SandboxService {
         '--cert', 'false',
         '--user-data-dir', paths.userDataDir,
         '--extensions-dir', paths.extensionsDir,
-        ASSESSMENT_ROOT,
+        ...launchTargets,
       ],
       detached: true,
     });
@@ -438,6 +454,54 @@ export class SandboxService {
   }
 
   /**
+   * Writes generated assessment files into the code-server workspace root.
+   */
+  async seedAssessmentFiles(
+    sandboxId: string,
+    files: Record<string, string>,
+  ): Promise<void> {
+    const sandbox = this.getSandboxOrThrow(sandboxId);
+    const assessmentRoot = await this.ensureAssessmentWorkspace(sandboxId);
+
+    const normalizedEntries: Array<{ path: string; content: Buffer<ArrayBufferLike> }> = [];
+    for (const [relativePath, content] of Object.entries(files)) {
+      const normalizedPath = posix.normalize(relativePath).replace(/^(\.\/)+/, '');
+      if (
+        !normalizedPath ||
+        normalizedPath === '.' ||
+        normalizedPath.startsWith('/') ||
+        normalizedPath.startsWith('../')
+      ) {
+        continue;
+      }
+
+      normalizedEntries.push({
+        path: posix.join(assessmentRoot, normalizedPath),
+        content: Buffer.from(content, 'utf-8'),
+      });
+    }
+
+    if (normalizedEntries.length === 0) {
+      return;
+    }
+
+    const parentDirectories = Array.from(
+      new Set(
+        normalizedEntries
+          .map((entry) => posix.dirname(entry.path))
+          .filter((directory) => directory !== assessmentRoot),
+      ),
+    );
+
+    if (parentDirectories.length > 0) {
+      await sandbox.runCommand('mkdir', ['-p', ...parentDirectories]);
+    }
+
+    await sandbox.writeFiles(normalizedEntries);
+    this.logger.info(`Seeded ${normalizedEntries.length} assessment files in sandbox ${sandboxId}`);
+  }
+
+  /**
    * Returns the public domain URL for a given port on the sandbox.
    */
   getDomainForPort(sandboxId: string, port: number): string {
@@ -535,9 +599,16 @@ export class SandboxService {
     };
   }
 
-  private async ensureAssessmentWorkspace(sandboxId: string): Promise<void> {
+  private async resolveAssessmentRoot(sandboxId: string): Promise<string> {
+    const homeDir = await this.getHomeDir(sandboxId);
+    return `${homeDir}/sandbox/assessments`;
+  }
+
+  private async ensureAssessmentWorkspace(sandboxId: string): Promise<string> {
     const sandbox = this.getSandboxOrThrow(sandboxId);
-    await sandbox.runCommand('mkdir', ['-p', ASSESSMENT_ROOT]);
+    const assessmentRoot = await this.resolveAssessmentRoot(sandboxId);
+    await sandbox.runCommand('mkdir', ['-p', assessmentRoot]);
+    return assessmentRoot;
   }
 
   private async ensureCodeServerInstalled(
@@ -574,7 +645,7 @@ export class SandboxService {
     const sandbox = this.getSandboxOrThrow(sandboxId);
     const paths = await this.resolveCodeServerPaths(sandboxId);
 
-    await this.ensureAssessmentWorkspace(sandboxId);
+    const assessmentRoot = await this.ensureAssessmentWorkspace(sandboxId);
     await this.ensureCodeServerInstalled(sandboxId, paths);
     await sandbox.runCommand('mkdir', [
       '-p',
@@ -588,7 +659,7 @@ export class SandboxService {
       `${paths.userDataDir}/User/settings.json`,
       JSON.stringify(
         {
-          'terminal.integrated.cwd': ASSESSMENT_ROOT,
+          'terminal.integrated.cwd': assessmentRoot,
           'workbench.startupEditor': 'none',
           'security.workspace.trust.enabled': false,
         },

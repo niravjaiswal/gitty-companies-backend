@@ -4,7 +4,7 @@ import { parseTestResults } from "../parse-test-results.js";
 function makeVitestJson(testResults: object[]): string {
   return JSON.stringify({
     success: testResults.every(
-      (t: Record<string, unknown>) => t.status !== "failed",
+      (t) => (t as Record<string, unknown>).status !== "failed",
     ),
     numTotalTests: 0,
     numPassedTests: 0,

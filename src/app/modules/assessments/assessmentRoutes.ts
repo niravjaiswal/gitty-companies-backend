@@ -4,55 +4,50 @@ import { getSupabaseAdmin } from '../../infra/db/supabase.js';
 import { normalizeEmail } from '../../shared/utils/email.js';
 import { getCompanyMembership } from '../../infra/auth/companyAuth.js';
 import type { SessionManager } from '../sessions/sessionManager.js';
+import {
+  AssessmentWorkspaceService,
+  normalizeAuthoringConfig,
+  normalizeStoredWorkspace,
+  type AssessmentAuthoringConfig,
+} from './assessmentWorkspace.js';
 
 interface AssessmentRouteOptions extends FastifyPluginOptions {
   sessionManager: SessionManager;
+  workspaceService: AssessmentWorkspaceService;
 }
 
-interface AssessmentStageConfig {
-  id?: string;
-  name: string;
-  objective?: string;
-  instructionsMd: string;
+function formatAssessmentPersistenceError(error: unknown, fallback: string): string {
+  if (!error || typeof error !== 'object') {
+    return fallback;
+  }
+
+  const candidate = error as {
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+  };
+
+  const parts = [candidate.message, candidate.details, candidate.hint]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ');
+
+  if (/workspace_(files|entry_file|generated_at)/i.test(parts)) {
+    return 'Assessment workspace migration is not applied. Run migration 007_assessment_workspace.sql.';
+  }
+
+  return fallback;
 }
 
-interface AssessmentAuthoringConfig {
-  mode: 'single' | 'multi';
-  stages: AssessmentStageConfig[];
-}
+function serializeAssessment(
+  assessment: Record<string, any>,
+  options?: { includeWorkspaceFiles?: boolean },
+) {
+  const workspace = normalizeStoredWorkspace(
+    assessment.workspace_files,
+    assessment.workspace_entry_file,
+    assessment.workspace_generated_at,
+  );
 
-function normalizeAuthoringConfig(input: unknown): AssessmentAuthoringConfig {
-  const value =
-    input && typeof input === 'object' && !Array.isArray(input)
-      ? (input as Record<string, unknown>)
-      : {};
-
-  const mode = value.mode === 'multi' ? 'multi' : 'single';
-  const rawStages = Array.isArray(value.stages) ? value.stages : [];
-
-  const stages = rawStages
-    .map((stage): AssessmentStageConfig | null => {
-      if (!stage || typeof stage !== 'object' || Array.isArray(stage)) return null;
-      const draft = stage as Record<string, unknown>;
-      const name = typeof draft.name === 'string' ? draft.name.trim() : '';
-      const instructionsMd =
-        typeof draft.instructionsMd === 'string' ? draft.instructionsMd.trim() : '';
-
-      if (!name || !instructionsMd) return null;
-
-      return {
-        id: typeof draft.id === 'string' ? draft.id : undefined,
-        name,
-        objective: typeof draft.objective === 'string' ? draft.objective.trim() : '',
-        instructionsMd,
-      };
-    })
-    .filter((stage): stage is AssessmentStageConfig => stage !== null);
-
-  return { mode, stages };
-}
-
-function serializeAssessment(assessment: Record<string, any>) {
   return {
     id: assessment.id,
     title: assessment.title,
@@ -65,6 +60,14 @@ function serializeAssessment(assessment: Record<string, any>) {
     updatedAt: assessment.updated_at,
     sourceBrief: assessment.source_brief ?? '',
     authoringConfig: normalizeAuthoringConfig(assessment.authoring_config),
+    workspaceFileCount: Object.keys(workspace.files).length,
+    workspaceEntryFile: workspace.entryFilePath || null,
+    workspaceGeneratedAt: workspace.generatedAt,
+    ...(options?.includeWorkspaceFiles
+      ? {
+          workspaceFiles: workspace.files,
+        }
+      : {}),
   };
 }
 
@@ -110,7 +113,7 @@ export async function assessmentRoutes(
   fastify: FastifyInstance,
   opts: AssessmentRouteOptions,
 ): Promise<void> {
-  const { sessionManager } = opts;
+  const { sessionManager, workspaceService } = opts;
   fastify.addHook('preHandler', authenticate);
 
   fastify.get('/api/company/me', async (request, reply) => {
@@ -255,6 +258,7 @@ export async function assessmentRoutes(
       sourceBrief?: string;
       authoringConfig?: AssessmentAuthoringConfig;
       status?: 'draft' | 'published';
+      generateWorkspace?: boolean;
     };
   }>(
     '/api/company/assessments',
@@ -290,6 +294,7 @@ export async function assessmentRoutes(
               },
             },
             status: { type: 'string', enum: ['draft', 'published'] },
+            generateWorkspace: { type: 'boolean' },
           },
         },
       },
@@ -302,18 +307,51 @@ export async function assessmentRoutes(
 
       const status = request.body.status ?? 'draft';
       const authoringConfig = normalizeAuthoringConfig(request.body.authoringConfig);
+      const title = request.body.title.trim();
+      const summary = request.body.summary?.trim() ?? '';
+      const instructionsMd = request.body.instructionsMd.trim();
+      const sourceBrief = request.body.sourceBrief?.trim() ?? '';
+      const shouldGenerateWorkspace = request.body.generateWorkspace ?? status === 'published';
+
+      let workspace: {
+        files: Record<string, string>;
+        entryFilePath: string;
+        generatedAt: string | null;
+      } = {
+        files: {},
+        entryFilePath: '',
+        generatedAt: null,
+      };
+      if (shouldGenerateWorkspace) {
+        try {
+          workspace = await workspaceService.generate({
+            title,
+            summary,
+            instructionsMd,
+            sourceBrief,
+            authoringConfig,
+          });
+        } catch (error) {
+          fastify.log.error({ error }, 'Failed to generate assessment workspace');
+          return reply.status(502).send({ error: 'Failed to generate assessment workspace' });
+        }
+      }
+
       const supabase = getSupabaseAdmin();
       const { data, error } = await supabase
         .from('assessments')
         .insert({
           company_id: membership.companyId,
           created_by: request.user.id,
-          title: request.body.title.trim(),
-          summary: request.body.summary?.trim() ?? '',
-          instructions_md: request.body.instructionsMd.trim(),
+          title,
+          summary,
+          instructions_md: instructionsMd,
           duration_minutes: request.body.durationMinutes,
-          source_brief: request.body.sourceBrief?.trim() ?? '',
+          source_brief: sourceBrief,
           authoring_config: authoringConfig,
+          workspace_files: workspace.files,
+          workspace_entry_file: workspace.entryFilePath,
+          workspace_generated_at: workspace.generatedAt,
           status,
           published_at: status === 'published' ? new Date().toISOString() : null,
         })
@@ -321,7 +359,10 @@ export async function assessmentRoutes(
         .single();
 
       if (error || !data) {
-        return reply.status(500).send({ error: 'Failed to create assessment' });
+        fastify.log.error({ error }, 'Failed to persist generated assessment');
+        return reply.status(500).send({
+          error: formatAssessmentPersistenceError(error, 'Failed to create assessment'),
+        });
       }
 
       return reply.status(201).send(serializeAssessment(data));
@@ -350,7 +391,7 @@ export async function assessmentRoutes(
         return reply.status(404).send({ error: 'Assessment not found' });
       }
 
-      return serializeAssessment(data);
+      return serializeAssessment(data, { includeWorkspaceFiles: true });
     },
   );
 
@@ -364,6 +405,9 @@ export async function assessmentRoutes(
       sourceBrief?: string;
       authoringConfig?: AssessmentAuthoringConfig;
       status?: 'draft' | 'published' | 'archived';
+      workspaceFiles?: Record<string, string>;
+      workspaceEntryFile?: string | null;
+      regenerateWorkspace?: boolean;
     };
   }>(
     '/api/company/assessments/:assessmentId',
@@ -398,6 +442,12 @@ export async function assessmentRoutes(
               },
             },
             status: { type: 'string', enum: ['draft', 'published', 'archived'] },
+            workspaceFiles: {
+              type: 'object',
+              additionalProperties: { type: 'string' },
+            },
+            workspaceEntryFile: { type: ['string', 'null'] },
+            regenerateWorkspace: { type: 'boolean' },
           },
         },
       },
@@ -406,6 +456,18 @@ export async function assessmentRoutes(
       const membership = await getCompanyMembership(request.user.id);
       if (!membership) {
         return reply.status(403).send({ error: 'Company access required' });
+      }
+
+      const supabase = getSupabaseAdmin();
+      const { data: existing, error: existingError } = await supabase
+        .from('assessments')
+        .select('*')
+        .eq('id', request.params.assessmentId)
+        .eq('company_id', membership.companyId)
+        .single();
+
+      if (existingError || !existing) {
+        return reply.status(404).send({ error: 'Assessment not found or update failed' });
       }
 
       const updates: Record<string, unknown> = {};
@@ -429,8 +491,64 @@ export async function assessmentRoutes(
           updates.published_at = new Date().toISOString();
         }
       }
+      if (request.body.workspaceFiles !== undefined) {
+        const normalizedWorkspace = normalizeStoredWorkspace(
+          request.body.workspaceFiles,
+          request.body.workspaceEntryFile,
+          existing.workspace_generated_at,
+        );
+        updates.workspace_files = normalizedWorkspace.files;
+        updates.workspace_entry_file = normalizedWorkspace.entryFilePath;
+        updates.workspace_generated_at = new Date().toISOString();
+      } else if (request.body.workspaceEntryFile !== undefined) {
+        const normalizedWorkspace = normalizeStoredWorkspace(
+          existing.workspace_files,
+          request.body.workspaceEntryFile,
+          existing.workspace_generated_at,
+        );
+        updates.workspace_entry_file = normalizedWorkspace.entryFilePath;
+      }
 
-      const supabase = getSupabaseAdmin();
+      const shouldRegenerateWorkspace =
+        request.body.regenerateWorkspace === true ||
+        ((request.body.title !== undefined ||
+          request.body.summary !== undefined ||
+          request.body.instructionsMd !== undefined ||
+          request.body.sourceBrief !== undefined ||
+          request.body.authoringConfig !== undefined) &&
+          request.body.regenerateWorkspace !== false);
+
+      if (shouldRegenerateWorkspace) {
+        const nextAuthoringConfig =
+          request.body.authoringConfig !== undefined
+            ? normalizeAuthoringConfig(request.body.authoringConfig)
+            : normalizeAuthoringConfig(existing.authoring_config);
+
+        try {
+          const workspace = await workspaceService.generate({
+            title: typeof updates.title === 'string' ? updates.title : (existing.title as string),
+            summary:
+              typeof updates.summary === 'string' ? updates.summary : (existing.summary as string),
+            instructionsMd:
+              typeof updates.instructions_md === 'string'
+                ? updates.instructions_md
+                : (existing.instructions_md as string),
+            sourceBrief:
+              typeof updates.source_brief === 'string'
+                ? updates.source_brief
+                : ((existing.source_brief as string) ?? ''),
+            authoringConfig: nextAuthoringConfig,
+          });
+
+          updates.workspace_files = workspace.files;
+          updates.workspace_entry_file = workspace.entryFilePath;
+          updates.workspace_generated_at = workspace.generatedAt;
+        } catch (error) {
+          fastify.log.error({ error }, 'Failed to regenerate assessment workspace');
+          return reply.status(502).send({ error: 'Failed to generate assessment workspace' });
+        }
+      }
+
       const { data, error } = await supabase
         .from('assessments')
         .update(updates)
@@ -440,7 +558,13 @@ export async function assessmentRoutes(
         .single();
 
       if (error || !data) {
-        return reply.status(404).send({ error: 'Assessment not found or update failed' });
+        fastify.log.error({ error }, 'Failed to update generated assessment');
+        return reply.status(500).send({
+          error: formatAssessmentPersistenceError(
+            error,
+            'Assessment not found or update failed',
+          ),
+        });
       }
 
       return serializeAssessment(data);
@@ -744,6 +868,7 @@ export async function assessmentRoutes(
           message.includes('not found') ? 404 :
           message.includes('active session') || message.includes('completed session') ? 409 :
           message.includes('claimed') || message.includes('cannot be started') ? 403 :
+          message.includes('workspace') ? 502 :
           500;
 
         return reply.status(statusCode).send({ error: message });

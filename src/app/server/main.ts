@@ -9,6 +9,7 @@ import { ActivityCollectorManager } from '../modules/activity/activityCollectorM
 import { sandboxRoutes } from '../modules/sessions/sessionRoutes.js';
 import { activityRoutes } from '../modules/activity/activityRoutes.js';
 import { assessmentRoutes } from '../modules/assessments/assessmentRoutes.js';
+import { AssessmentWorkspaceService } from '../modules/assessments/assessmentWorkspace.js';
 
 const config = loadConfig();
 const fastify = Fastify({
@@ -18,7 +19,14 @@ const fastify = Fastify({
 const supabaseAdmin = getSupabaseAdmin();
 const sandboxService = new SandboxService(fastify.log);
 const collectorManager = new ActivityCollectorManager(supabaseAdmin, sandboxService, fastify.log);
-const sessionManager = new SessionManager(supabaseAdmin, sandboxService, fastify.log, collectorManager);
+const workspaceService = new AssessmentWorkspaceService();
+const sessionManager = new SessionManager(
+  supabaseAdmin,
+  sandboxService,
+  fastify.log,
+  collectorManager,
+  workspaceService,
+);
 
 // Register CORS (needed for frontend on port 8080 → backend on port 4000)
 fastify.register(cors, {
@@ -33,7 +41,7 @@ fastify.register(sandboxRoutes, { sessionManager, sandboxService });
 fastify.register(activityRoutes, { sessionManager });
 
 // Register company/candidate assessment routes
-fastify.register(assessmentRoutes, { sessionManager });
+fastify.register(assessmentRoutes, { sessionManager, workspaceService });
 
 // Health check
 fastify.get('/', async () => {

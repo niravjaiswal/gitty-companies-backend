@@ -58,6 +58,9 @@ export async function sandboxRoutes(
           if (error.message.includes('claimed') || error.message.includes('cannot be started')) {
             return reply.status(403).send({ error: error.message });
           }
+          if (error.message.includes('workspace')) {
+            return reply.status(502).send({ error: error.message });
+          }
           if (error.message.includes('not found')) {
             return reply.status(404).send({ error: error.message });
           }
@@ -112,7 +115,9 @@ export async function sandboxRoutes(
       const { data: assessment } = session.assessmentId
         ? await supabase
             .from('assessments')
-            .select('id, title, summary, instructions_md, duration_minutes')
+            .select(
+              'id, title, summary, instructions_md, duration_minutes, workspace_entry_file, workspace_generated_at, workspace_files',
+            )
             .eq('id', session.assessmentId)
             .maybeSingle()
         : { data: null };
@@ -126,6 +131,14 @@ export async function sandboxRoutes(
               summary: assessment.summary,
               instructionsMd: assessment.instructions_md,
               durationMinutes: assessment.duration_minutes,
+              workspaceEntryFile: assessment.workspace_entry_file || null,
+              workspaceGeneratedAt: assessment.workspace_generated_at || null,
+              workspaceFileCount:
+                assessment.workspace_files &&
+                typeof assessment.workspace_files === 'object' &&
+                !Array.isArray(assessment.workspace_files)
+                  ? Object.keys(assessment.workspace_files as Record<string, unknown>).length
+                  : 0,
             }
           : null,
       };

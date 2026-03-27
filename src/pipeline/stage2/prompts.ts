@@ -5,6 +5,7 @@ export const STAGE2_SYSTEM_PROMPT = `You are a senior engineering manager design
 ## Your Design Principles
 
 1. REALISM: Every assessment must feel like a task someone would actually encounter at work. No toy problems, no LeetCode wrappers, no "build a todo app." Invent a plausible company and technical context.
+1a. PRODUCT SHAPE: The assessment must produce an actual product-shaped repo, not just infrastructure or sandbox scaffolding. There should be a recognizable app, tool, or service with user-facing or operator-facing features.
 
 2. TARGETED TESTING: Each task must map to specific skill axes. If a task doesn't clearly test a listed skill, cut it. If a skill axis has no task testing it, add one.
 
@@ -24,6 +25,8 @@ export const STAGE2_SYSTEM_PROMPT = `You are a senior engineering manager design
 - At least one task should involve reading and understanding existing code before modifying it. This tests real-world onboarding ability.
 - At least one task should have a non-obvious "best" solution where the candidate's approach reveals their experience level.
 - Never include tasks that test framework-specific trivia or memorization of APIs. Test thinking, not recall.
+- Frontend scenarios should usually involve a real interactive product surface such as auth, data flows, collaborative UI, dashboarding, a game-like interaction loop, or a workflow tool.
+- Rust or systems scenarios should usually involve a creative implementation such as a TUI, CLI, parser, async service, event processor, or systems utility rather than a generic REST CRUD app.
 
 ## File Manifest Rules
 
