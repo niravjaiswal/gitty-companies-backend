@@ -241,20 +241,6 @@ export class SandboxService {
     const assessmentRoot = await this.ensureAssessmentWorkspace(sandboxId);
     await this.ensureCodeServerInstalled(sandboxId, paths);
 
-    const launchTargets = [assessmentRoot];
-    const entryFilePath = options?.entryFilePath?.trim() ?? '';
-    const normalizedEntryFilePath = entryFilePath
-      ? posix.normalize(entryFilePath).replace(/^(\.\/)+/, '')
-      : '';
-    if (
-      normalizedEntryFilePath &&
-      normalizedEntryFilePath !== '.' &&
-      !normalizedEntryFilePath.startsWith('/') &&
-      !normalizedEntryFilePath.startsWith('../')
-    ) {
-      launchTargets.push(posix.join(assessmentRoot, normalizedEntryFilePath));
-    }
-
     // Step 2: Start code-server detached (pass all config via CLI args)
     this.logger.info(`Starting code-server in sandbox ${sandboxId}...`);
     await sandbox.runCommand({
@@ -265,7 +251,7 @@ export class SandboxService {
         '--cert', 'false',
         '--user-data-dir', paths.userDataDir,
         '--extensions-dir', paths.extensionsDir,
-        ...launchTargets,
+        assessmentRoot,
       ],
       detached: true,
     });

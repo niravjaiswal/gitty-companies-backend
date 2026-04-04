@@ -10,6 +10,7 @@ import {
   normalizeStoredWorkspace,
   type AssessmentAuthoringConfig,
 } from './assessmentWorkspace.js';
+import { buildDemoAssessmentCopy } from './demoWorkspace.js';
 
 interface AssessmentRouteOptions extends FastifyPluginOptions {
   sessionManager: SessionManager;
@@ -259,6 +260,8 @@ export async function assessmentRoutes(
       authoringConfig?: AssessmentAuthoringConfig;
       status?: 'draft' | 'published';
       generateWorkspace?: boolean;
+      demoMode?: boolean;
+      demoCandidateEmail?: string;
     };
   }>(
     '/api/company/assessments',
@@ -295,6 +298,8 @@ export async function assessmentRoutes(
             },
             status: { type: 'string', enum: ['draft', 'published'] },
             generateWorkspace: { type: 'boolean' },
+            demoMode: { type: 'boolean' },
+            demoCandidateEmail: { type: 'string', maxLength: 320 },
           },
         },
       },
@@ -307,9 +312,17 @@ export async function assessmentRoutes(
 
       const status = request.body.status ?? 'draft';
       const authoringConfig = normalizeAuthoringConfig(request.body.authoringConfig);
-      const title = request.body.title.trim();
-      const summary = request.body.summary?.trim() ?? '';
-      const instructionsMd = request.body.instructionsMd.trim();
+      const demoMode = request.body.demoMode === true;
+      const demoCopy = demoMode
+        ? buildDemoAssessmentCopy({
+            title: request.body.title,
+            summary: request.body.summary,
+            instructionsMd: request.body.instructionsMd,
+          })
+        : null;
+      const title = demoCopy?.title ?? request.body.title.trim();
+      const summary = demoCopy?.summary ?? request.body.summary?.trim() ?? '';
+      const instructionsMd = demoCopy?.instructionsMd ?? request.body.instructionsMd.trim();
       const sourceBrief = request.body.sourceBrief?.trim() ?? '';
       const shouldGenerateWorkspace = request.body.generateWorkspace ?? status === 'published';
 
@@ -330,6 +343,7 @@ export async function assessmentRoutes(
             instructionsMd,
             sourceBrief,
             authoringConfig,
+            generationMode: demoMode ? 'demo' : 'live',
           });
         } catch (error) {
           fastify.log.error({ error }, 'Failed to generate assessment workspace');
@@ -365,7 +379,43 @@ export async function assessmentRoutes(
         });
       }
 
-      return reply.status(201).send(serializeAssessment(data));
+      const requestedDemoEmail =
+        typeof request.body.demoCandidateEmail === 'string'
+          ? normalizeEmail(request.body.demoCandidateEmail)
+          : '';
+      const shouldSeedDemoAssignment = demoMode && requestedDemoEmail.includes('@');
+
+      let demoAssignmentCreated = false;
+      if (shouldSeedDemoAssignment) {
+        const { data: existingAssignment } = await supabase
+          .from('assessment_assignments')
+          .select('id')
+          .eq('assessment_id', data.id)
+          .eq('candidate_email_normalized', requestedDemoEmail)
+          .maybeSingle();
+
+        if (!existingAssignment) {
+          const { error: assignmentError } = await supabase.from('assessment_assignments').insert({
+            assessment_id: data.id,
+            company_id: membership.companyId,
+            candidate_email: request.body.demoCandidateEmail?.trim() ?? requestedDemoEmail,
+            candidate_email_normalized: requestedDemoEmail,
+          });
+
+          if (assignmentError) {
+            fastify.log.error({ assignmentError }, 'Failed to create demo assignment');
+          } else {
+            demoAssignmentCreated = true;
+          }
+        }
+      }
+
+      return reply.status(201).send({
+        ...serializeAssessment(data),
+        demoMode,
+        demoCandidateEmail: shouldSeedDemoAssignment ? requestedDemoEmail : null,
+        demoAssignmentCreated,
+      });
     },
   );
 

@@ -3,6 +3,7 @@ import { extractSpec } from '../../../pipeline/stage1/extract-spec.js';
 import { designScenario } from '../../../pipeline/stage2/design-scenario.js';
 import { generateRepo } from '../../../pipeline/stage3/generate-repo.js';
 import { validateRepo } from '../../../pipeline/stage4/validate-repo.js';
+import { buildDemoWorkspace } from './demoWorkspace.js';
 
 export interface AssessmentStageConfig {
   id?: string;
@@ -28,6 +29,7 @@ export interface AssessmentWorkspaceGenerationInput {
   instructionsMd: string;
   sourceBrief: string;
   authoringConfig: AssessmentAuthoringConfig;
+  generationMode?: 'live' | 'demo';
 }
 
 function normalizeWorkspaceRelativePath(filePath: string): string | null {
@@ -211,6 +213,13 @@ export class AssessmentWorkspaceService {
   async generate(
     input: AssessmentWorkspaceGenerationInput,
   ): Promise<StoredAssessmentWorkspace> {
+    if (input.generationMode === 'demo') {
+      return buildDemoWorkspace({
+        title: input.title,
+        instructionsMd: input.instructionsMd,
+      });
+    }
+
     const prompt = buildAssessmentGenerationPrompt(input);
     const spec = await extractSpec(prompt);
     const scenario = await designScenario(spec);
