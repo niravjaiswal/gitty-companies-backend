@@ -1,0 +1,15 @@
+{
+  "name": "rest-api-express",
+  "language": "typescript",
+  "pattern": "rest-api",
+  "difficulty_range": { "min": "junior", "max": "mid" },
+  "skill_axes": ["api_design", "error_handling", "testing_strategy", "validation"],
+  "estimated_scope": { "min": "1-2 hours", "max": "2-4 hours" },
+  "domain_tags": ["backend"],
+  "description": "An Express REST API with TypeScript and vitest. Candidates implement a missing PUT endpoint for task updates with validation and error handling.",
+  "assessment_copy": {
+    "title": "Task Board API",
+    "summary": "An Express REST API skeleton where candidates implement missing CRUD operations with proper validation and error handling.",
+    "instructions_md": "# Task Board API\n\n## Overview\n\nYou are working on a task management REST API built with Express and TypeScript. The API manages tasks with CRUD operations.\n\nMost endpoints are already implemented. Your job is to finish the missing `PUT /tasks/:id` endpoint that updates an existing task.\n\n## Core task\n\nImplement the `PUT /tasks/:id` endpoint in `src/routes/tasks.ts`.\n\nThe endpoint should:\n- Accept a JSON body with optional `title`, `description`, and `status` fields\n- Return 404 if the task doesn't exist\n- Return 400 if no valid fields are provided\n- Return the updated task as JSON\n- Validate that status is one of: 'todo', 'in_progress', 'done'\n\n## Candidate workflow\n\n1. Read the existing code to understand the data model and patterns\n2. Run the tests to see what's expected\n3. Implement the missing endpoint\n4. Make all tests pass\n\n## Commands\n\n```bash\nnpm install\nnpm run dev\nnpm test\n```"
+  }
+}
