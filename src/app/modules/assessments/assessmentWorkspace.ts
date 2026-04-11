@@ -214,7 +214,7 @@ export class AssessmentWorkspaceService {
     input: AssessmentWorkspaceGenerationInput,
   ): Promise<StoredAssessmentWorkspace> {
     if (input.generationMode === 'demo') {
-      return buildDemoWorkspace({
+      return await buildDemoWorkspace({
         title: input.title,
         instructionsMd: input.instructionsMd,
       });
