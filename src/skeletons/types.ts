@@ -1,0 +1,108 @@
+import { z } from "zod";
+import {
+  DomainEnum,
+  SkillAxisEnum,
+  DifficultyEnum,
+  EstimatedScopeEnum,
+} from "../pipeline/stage1/spec-schema.js";
+
+// ── Language & pattern enums ────────────────────────────────────
+
+export const SkeletonLanguageEnum = z.enum(["typescript", "python"]);
+
+export const SkeletonPatternEnum = z.enum([
+  "react-spa",
+  "rest-api",
+  "cli-tool",
+  "data-processing",
+  "full-stack",
+  "real-time",
+]);
+
+// ── File role in the manifest ───────────────────────────────────
+
+export const FileRoleEnum = z.enum(["provided", "candidate", "partial"]);
+
+// ── Manifest file entry ─────────────────────────────────────────
+//
+// Each file in a skeleton has:
+//   role      — what the candidate sees (provided code, candidate-authored, or partial)
+//   adapt     — whether the AI remix layer should modify this file
+//   purpose   — human-readable description of the file's role
+//
+// Static files (adapt: false) are never sent to the LLM and apply-patch
+// rejects any patches targeting them. This constrains the LLM's error surface.
+
+export const ManifestFileEntrySchema = z.object({
+  path: z.string().min(1),
+  role: FileRoleEnum,
+  adapt: z.boolean(),
+  purpose: z.string().min(1),
+});
+
+export const ManifestSchema = z.object({
+  files: z.array(ManifestFileEntrySchema).min(1),
+});
+
+// ── Skeleton metadata (skeleton.json) ───────────────────────────
+
+export const SkeletonSchema = z.object({
+  name: z.string().min(1),
+  language: SkeletonLanguageEnum,
+  pattern: SkeletonPatternEnum,
+  difficulty_range: z.object({
+    min: DifficultyEnum,
+    max: DifficultyEnum,
+  }),
+  skill_axes: z.array(SkillAxisEnum).min(1).max(8),
+  estimated_scope: z.object({
+    min: EstimatedScopeEnum,
+    max: EstimatedScopeEnum,
+  }),
+  domain_tags: z.array(DomainEnum).min(1),
+  description: z.string().min(1),
+});
+
+// ── Patch format (output of adapt-skeleton) ─────────────────────
+//
+// Full-file replacement. Each entry replaces the entire content of
+// a file in the skeleton. Only files marked adapt: true in the
+// manifest are valid patch targets.
+
+export const FilePatchEntrySchema = z.object({
+  path: z.string().min(1),
+  action: z.literal("replace_content"),
+  content: z.string(),
+});
+
+export const RemixPatchSchema = z.object({
+  scenario: z.object({
+    title: z.string().min(1),
+    company_name: z.string().min(1),
+    narrative: z.string().min(1),
+  }),
+  file_patches: z.array(FilePatchEntrySchema),
+  tasks: z.array(
+    z.object({
+      title: z.string().min(1),
+      description: z.string().min(1),
+    }),
+  ),
+  rubric: z.array(
+    z.object({
+      criterion: z.string().min(1),
+      weight: z.number().min(0).max(1),
+    }),
+  ),
+});
+
+// ── Inferred types ──────────────────────────────────────────────
+
+export type SkeletonLanguage = z.infer<typeof SkeletonLanguageEnum>;
+export type SkeletonPattern = z.infer<typeof SkeletonPatternEnum>;
+export type FileRole = z.infer<typeof FileRoleEnum>;
+export type ManifestFileEntry = z.infer<typeof ManifestFileEntrySchema>;
+export type Manifest = z.infer<typeof ManifestSchema>;
+export type Skeleton = z.infer<typeof SkeletonSchema>;
+export type FilePatchEntry = z.infer<typeof FilePatchEntrySchema>;
+export type RemixPatch = z.infer<typeof RemixPatchSchema>;
