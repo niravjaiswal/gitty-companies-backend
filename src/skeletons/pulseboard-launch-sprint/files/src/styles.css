@@ -1,0 +1,354 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f5f7fb;
+  background:
+    radial-gradient(circle at top left, rgba(30, 144, 255, 0.24), transparent 26%),
+    radial-gradient(circle at top right, rgba(247, 147, 30, 0.28), transparent 22%),
+    linear-gradient(180deg, #07111f 0%, #091725 48%, #050b14 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 2rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(5, 8, 16, 0.74), rgba(5, 8, 16, 0.4));
+  backdrop-filter: blur(28px);
+}
+
+.sidebar h1,
+.hero h2,
+.panel h3 {
+  margin: 0;
+  font-family: "Sora", Inter, sans-serif;
+  letter-spacing: -0.04em;
+}
+
+.sidebar h1 {
+  margin-top: 0.5rem;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 0.95;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(165, 199, 255, 0.74);
+}
+
+.lede {
+  margin-top: 1rem;
+  color: rgba(237, 242, 255, 0.74);
+  line-height: 1.7;
+}
+
+.sidebar-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.35rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-card span,
+.metric-card span {
+  display: block;
+  color: rgba(220, 228, 247, 0.66);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.sidebar-card strong,
+.metric-card strong {
+  display: block;
+  margin-top: 0.55rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.sidebar-card p,
+.metric-card p,
+.hero p,
+.task-meta,
+.timeline-detail,
+.empty-state,
+.field span,
+.composer-error {
+  color: rgba(228, 235, 248, 0.7);
+  line-height: 1.6;
+}
+
+.sidebar-card code {
+  display: block;
+  margin-top: 0.65rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.9rem;
+  background: rgba(7, 12, 22, 0.7);
+  font-size: 0.82rem;
+  color: #dff1ff;
+}
+
+.sidebar-card.muted {
+  background: rgba(12, 22, 35, 0.56);
+}
+
+.workspace {
+  padding: 2rem;
+}
+
+.hero,
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.6rem;
+  background: rgba(8, 13, 24, 0.62);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.18);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 1.5rem;
+  padding: 1.6rem;
+}
+
+.hero h2 {
+  margin-top: 0.55rem;
+  font-size: clamp(2rem, 4vw, 3.25rem);
+}
+
+.hero p {
+  max-width: 46rem;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.metric-card {
+  border-radius: 1.2rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+}
+
+.panel-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.8fr);
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.panel {
+  padding: 1.35rem;
+}
+
+.panel-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.search,
+.select,
+.field input,
+.field select {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  padding: 0.75rem 1rem;
+}
+
+.search {
+  min-width: 260px;
+}
+
+.composer {
+  margin-top: 1.2rem;
+  padding: 1rem;
+  border-radius: 1.2rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.composer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.field span {
+  font-size: 0.8rem;
+}
+
+.primary-button {
+  margin-top: 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff8b3d, #ff5f1f);
+  color: white;
+  padding: 0.8rem 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.composer-error {
+  margin: 0.75rem 0 0;
+  color: #ffb7b7;
+}
+
+.task-list,
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+.task-card,
+.timeline-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.task-title,
+.timeline-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.task-meta,
+.timeline-detail {
+  margin: 0.25rem 0 0;
+  font-size: 0.94rem;
+}
+
+.timeline-item {
+  align-items: flex-start;
+}
+
+.timeline-time {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(96, 160, 255, 0.14);
+  color: #bfd8ff;
+  font-weight: 600;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.48rem 0.78rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.status-ready {
+  background: rgba(31, 192, 125, 0.16);
+  color: #7df0bd;
+}
+
+.status-watch {
+  background: rgba(255, 186, 73, 0.16);
+  color: #ffd48b;
+}
+
+.status-blocked {
+  background: rgba(255, 97, 97, 0.16);
+  color: #ffacac;
+}
+
+.empty-state {
+  padding: 1.4rem;
+  text-align: center;
+  border-radius: 1rem;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 1080px) {
+  .shell,
+  .hero,
+  .panel-row {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-grid,
+  .composer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace,
+  .sidebar {
+    padding: 1rem;
+  }
+
+  .toolbar {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .search {
+    min-width: 0;
+    width: 100%;
+  }
+}
