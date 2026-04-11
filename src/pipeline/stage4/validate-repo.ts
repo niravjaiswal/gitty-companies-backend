@@ -2,14 +2,14 @@ import type { GenerateRepoResult } from "../stage3/generate-repo.js";
 import type { ScenarioDesign } from "../stage2/scenario-schema.js";
 import type { AssessmentSpec } from "../stage1/spec-schema.js";
 import { resolveImportPath } from "../stage3/validate-file.js";
-import { RepoExecutor } from "./executor.js";
-import { parseTscErrors, formatTscErrors } from "./parse-tsc-errors.js";
-import { parseTestResults } from "./parse-test-results.js";
+import { RepoExecutor } from "../../validation/executor.js";
+import { parseTscErrors, formatTscErrors } from "../../validation/parse-tsc-errors.js";
+import { parseTestResults } from "../../validation/parse-test-results.js";
 import {
   parseRuntimeErrors,
   runtimeErrorsToTscErrorMap,
-} from "./parse-runtime-errors.js";
-import { repairTscError, repairTestFailure } from "./repair.js";
+} from "../../validation/parse-runtime-errors.js";
+import { repairTscError, repairTestFailure } from "../../validation/repair.js";
 
 export interface ValidatedRepoResult {
   files: Map<string, string>;
@@ -120,7 +120,7 @@ async function runNpmInstall(
 
   result.repairsAttempted = 1;
   try {
-    const { repairTscError: repairPkgJson } = await import("./repair.js");
+    const { repairTscError: repairPkgJson } = await import("../../validation/repair.js");
     const repaired = await repairPkgJson(
       "package.json",
       packageJsonContent,

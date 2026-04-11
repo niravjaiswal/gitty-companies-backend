@@ -1,5 +1,5 @@
-import { callLlm } from "../../app/external/llm/client.js";
-import { stripMarkdownFences } from "../stage3/validate-file.js";
+import { callLlm } from "../app/external/llm/client.js";
+import { stripMarkdownFences } from "../pipeline/stage3/validate-file.js";
 import {
   STAGE4_REPAIR_SYSTEM_PROMPT,
   buildTscRepairPrompt,
