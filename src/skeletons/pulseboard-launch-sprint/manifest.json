@@ -1,0 +1,19 @@
+{
+  "files": [
+    { "path": "README.md", "role": "provided", "adapt": true, "purpose": "Project overview and candidate instructions" },
+    { "path": "package.json", "role": "provided", "adapt": false, "purpose": "NPM dependencies and scripts" },
+    { "path": "vite.config.ts", "role": "provided", "adapt": false, "purpose": "Vite build configuration" },
+    { "path": "tsconfig.json", "role": "provided", "adapt": false, "purpose": "TypeScript compiler options" },
+    { "path": "index.html", "role": "provided", "adapt": true, "purpose": "HTML entry point with page title" },
+    { "path": "src/main.tsx", "role": "provided", "adapt": false, "purpose": "React app bootstrap" },
+    { "path": "src/data.ts", "role": "provided", "adapt": true, "purpose": "Seed data for tasks, activity feed, and stats" },
+    { "path": "src/styles.css", "role": "provided", "adapt": true, "purpose": "Global stylesheet with glass-morphism design" },
+    { "path": "src/App.tsx", "role": "candidate", "adapt": true, "purpose": "Main app component with state management — candidate implements task creation" },
+    { "path": "src/App.test.tsx", "role": "provided", "adapt": true, "purpose": "Vitest test suite validating filtering, search, and task creation" },
+    { "path": "src/components/SidebarSummary.tsx", "role": "provided", "adapt": true, "purpose": "Left sidebar with launch confidence metrics" },
+    { "path": "src/components/MetricGrid.tsx", "role": "provided", "adapt": true, "purpose": "Hero metric cards grid" },
+    { "path": "src/components/LaunchComposer.tsx", "role": "provided", "adapt": true, "purpose": "Task creation form component" },
+    { "path": "src/components/LaunchTaskList.tsx", "role": "provided", "adapt": true, "purpose": "Filterable task checklist" },
+    { "path": "src/components/TimelineFeed.tsx", "role": "provided", "adapt": true, "purpose": "Activity timeline feed" }
+  ]
+}
