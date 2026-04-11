@@ -46,6 +46,12 @@ export const ManifestSchema = z.object({
 
 // ── Skeleton metadata (skeleton.json) ───────────────────────────
 
+export const AssessmentCopySchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  instructions_md: z.string().min(1),
+});
+
 export const SkeletonSchema = z.object({
   name: z.string().min(1),
   language: SkeletonLanguageEnum,
@@ -61,6 +67,7 @@ export const SkeletonSchema = z.object({
   }),
   domain_tags: z.array(DomainEnum).min(1),
   description: z.string().min(1),
+  assessment_copy: AssessmentCopySchema.optional(),
 });
 
 // ── Patch format (output of adapt-skeleton) ─────────────────────
@@ -103,6 +110,13 @@ export type SkeletonPattern = z.infer<typeof SkeletonPatternEnum>;
 export type FileRole = z.infer<typeof FileRoleEnum>;
 export type ManifestFileEntry = z.infer<typeof ManifestFileEntrySchema>;
 export type Manifest = z.infer<typeof ManifestSchema>;
+export type AssessmentCopy = z.infer<typeof AssessmentCopySchema>;
 export type Skeleton = z.infer<typeof SkeletonSchema>;
 export type FilePatchEntry = z.infer<typeof FilePatchEntrySchema>;
 export type RemixPatch = z.infer<typeof RemixPatchSchema>;
+
+export type LoadedSkeleton = {
+  skeleton: Skeleton;
+  manifest: Manifest;
+  files: Record<string, string>;
+};
