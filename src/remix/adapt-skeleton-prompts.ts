@@ -35,6 +35,11 @@ You will receive a skeleton assessment (template) and a brief describing the tar
 
 8. **Rubric weights must sum to 1.0.**
 
+9. **Never rename data-testid attributes or getByTestId selectors.**
+   - data-testid values (e.g. data-testid="composer-title") are structural anchors. Copy them exactly as-is.
+   - getByTestId('composer-title') in tests must remain unchanged — these are not domain-specific.
+   - You MAY rename aria-label values, user-visible text, and getByText/getByLabelText selectors to match the domain.
+
 ## Output Schema
 
 Respond with a JSON object matching this structure:

@@ -5,7 +5,8 @@
  */
 import { remix } from "./remix.js";
 
-const skeletonId = process.argv[2] || "rest-api-express";
+const useAgent = process.argv.includes("--agent");
+const skeletonId = process.argv.filter((a) => !a.startsWith("--"))[2] || "rest-api-express";
 
 const SAMPLE_BRIEFS: Record<string, string> = {
   "rest-api-express": `
@@ -31,18 +32,23 @@ if (!brief) {
 }
 
 async function main() {
-  console.error(`\n=== Smoke Test: ${skeletonId} ===\n`);
+  console.error(`\n=== Smoke Test: ${skeletonId}${useAgent ? " (AGENT)" : ""} ===\n`);
 
   const result = await remix({
     skeletonId,
     jobBrief: brief,
     maxRepairRounds: 1,
+    useAgent,
   });
 
   console.log("\n=== Results ===");
   console.log(`Brief: ${result.brief.company_name} — ${result.brief.role_title}`);
-  console.log(`Patch: ${result.patch.file_patches.length} files, ${result.patch.tasks.length} tasks`);
-  console.log(`Scenario: ${result.patch.scenario.title}`);
+  if (result.patch) {
+    console.log(`Patch: ${result.patch.file_patches.length} files, ${result.patch.tasks.length} tasks`);
+    console.log(`Scenario: ${result.patch.scenario.title}`);
+  } else {
+    console.log(`Scenario: ${result.workspace.scenario.title} (agent path — no patch)`);
+  }
   console.log(`Validation: ${result.validation ? (result.validation.overallPass ? "PASS" : "FAIL") : "SKIPPED"}`);
 
   if (result.validation && !result.validation.overallPass) {
@@ -52,9 +58,14 @@ async function main() {
     }
   }
 
+  const adapt = result.usage.adapt;
   console.log(`\nToken usage:`);
   console.log(`  Extract: ${result.usage.extract.inputTokens} in / ${result.usage.extract.outputTokens} out (${result.usage.extract.model})`);
-  console.log(`  Adapt: ${result.usage.adapt.inputTokens} in / ${result.usage.adapt.outputTokens} out (${result.usage.adapt.model})`);
+  if ("model" in adapt) {
+    console.log(`  Adapt: ${adapt.inputTokens} in / ${adapt.outputTokens} out (${adapt.model})`);
+  } else {
+    console.log(`  Adapt (agent): ${adapt.inputTokens} in / ${adapt.outputTokens} out | $${adapt.totalCostUsd.toFixed(3)} | ${adapt.turns} turns | ${Math.round(adapt.durationMs / 1000)}s`);
+  }
 }
 
 main().catch((err) => {

@@ -8,19 +8,20 @@ const EXPECTED_FILES = [
   "tsconfig.json",
   "index.html",
   "src/main.tsx",
+  "src/test/setup.ts",
   "src/data.ts",
   "src/styles.css",
   "src/App.tsx",
   "src/App.test.tsx",
   "src/components/SidebarSummary.tsx",
   "src/components/MetricGrid.tsx",
-  "src/components/LaunchComposer.tsx",
-  "src/components/LaunchTaskList.tsx",
+  "src/components/Composer.tsx",
+  "src/components/ItemList.tsx",
   "src/components/TimelineFeed.tsx",
 ];
 
 describe("buildDemoWorkspace shim (pulseboard regression)", () => {
-  it("returns all 15 expected files", async () => {
+  it("returns all 16 expected files", async () => {
     const result = await buildDemoWorkspace({
       title: "Pulseboard Launch Sprint",
       instructionsMd: "",
@@ -98,7 +99,7 @@ describe("buildDemoWorkspace shim (pulseboard regression)", () => {
     });
 
     expect(result.files["src/App.tsx"]).toContain("handleAddTask");
-    expect(result.files["src/App.tsx"]).toContain("LaunchComposer");
+    expect(result.files["src/App.tsx"]).toContain("Composer");
     expect(result.files["src/App.test.tsx"]).toContain(
       "Pulseboard launch dashboard",
     );

@@ -13,4 +13,4 @@ export {
 } from "./parse-runtime-errors.js";
 export type { RuntimeError } from "./parse-runtime-errors.js";
 
-export { repairTscError, repairTestFailure } from "./repair.js";
+export { repairTscError, repairTestFailure, repairTestSelectors } from "./repair.js";

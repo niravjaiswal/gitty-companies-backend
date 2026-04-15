@@ -51,3 +51,32 @@ ${testFileContent}
 
 Fix the implementation file so the tests pass. Output ONLY the corrected implementation file — no markdown fences, no explanation.`;
 }
+
+export function buildTestSelectorRepairPrompt(
+  testFilePath: string,
+  testFileContent: string,
+  componentFiles: Map<string, string>,
+  failureMessages: string[],
+): string {
+  const componentSection = [...componentFiles.entries()]
+    .map(
+      ([path, content]) => `Component file "${path}":\n\`\`\`\n${content}\n\`\`\``,
+    )
+    .join("\n\n");
+
+  return `The test file "${testFilePath}" has failing tests because its selectors (getByLabelText, getByRole, getByText, queryByText, etc.) don't match the actual labels, roles, and text rendered by the components.
+
+Test failures:
+${failureMessages.map((m) => `- ${m}`).join("\n")}
+
+Test file ("${testFilePath}") — THIS is the file to fix:
+\`\`\`
+${testFileContent}
+\`\`\`
+
+${componentSection}
+
+Fix the test file so its selectors match the actual aria-labels, roles, button text, and content rendered by the components. Keep the same test structure and assertions — only update the selectors and expected values to match the component output.
+
+Output ONLY the corrected test file — no markdown fences, no explanation.`;
+}
