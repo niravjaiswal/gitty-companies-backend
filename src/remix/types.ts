@@ -23,6 +23,16 @@ export type TokenUsage = {
   model: string;
 };
 
+// ── Agent usage (from Agent SDK) ───────────────────────────────
+
+export type AgentUsage = {
+  totalCostUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  turns: number;
+  durationMs: number;
+};
+
 // ── Validation report from post-remix tsc + vitest ─────────────
 
 export type ValidationReport = {
@@ -49,17 +59,18 @@ export type RemixOptions = {
   jobBrief: string;
   maxRepairRounds?: number;
   skipValidation?: boolean;
+  useAgent?: boolean;
 };
 
 // ── Orchestrator output ────────────────────────────────────────
 
 export type RemixResult = {
   brief: Brief;
-  patch: RemixPatch;
+  patch: RemixPatch | null;
   workspace: RemixedWorkspace;
   validation: ValidationReport | null;
   usage: {
     extract: TokenUsage;
-    adapt: TokenUsage;
+    adapt: TokenUsage | AgentUsage;
   };
 };

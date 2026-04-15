@@ -12,13 +12,14 @@ function getClient(): Anthropic {
 }
 
 export async function callLlm(config: LlmCallConfig): Promise<LlmCallResult> {
-  const response = await getClient().messages.create({
+  const stream = getClient().messages.stream({
     model: config.model,
     max_tokens: config.maxTokens,
     system: config.system,
     messages: config.messages,
     temperature: config.temperature ?? 0,
   });
+  const response = await stream.finalMessage();
 
   const firstBlock = response.content[0];
   const content = firstBlock.type === "text" ? firstBlock.text : "";

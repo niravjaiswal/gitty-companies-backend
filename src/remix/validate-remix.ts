@@ -5,6 +5,7 @@ import {
   parseTestResults,
   repairTscError,
   repairTestFailure,
+  repairTestSelectors,
 } from "../validation/index.js";
 import type { Manifest } from "../skeletons/types.js";
 import type { RemixedWorkspace, ValidationReport } from "./types.js";
@@ -93,37 +94,65 @@ export async function validateRemix(
         for (const fileResult of testResults) {
           if (fileResult.passed) continue;
 
-          // Find the implementation file to repair (not the test file).
-          // Test files test adapt-true implementation files — repair the impl.
           const failureMessages = fileResult.failures.map((f) => f.message);
+          const testRelPath = fileResult.filePath.replace(executor.dir + "/", "");
+          if (testRelPath.startsWith("/")) {
+            // filePath was outside executor.dir — skip repair
+            continue;
+          }
 
-          // Look for the corresponding adapt-true source file.
-          // Convention: test file tests the non-test file in the same directory
-          // or the file it imports. We repair all adapt-true files that have tsc
-          // errors or are likely related to the failing tests.
-          for (const adaptPath of adaptPaths) {
-            // Skip test files themselves — we repair implementations
-            if (adaptPath.includes(".test.") || adaptPath.includes("__tests__")) continue;
+          // Check if failures are selector mismatches (testing-library can't find elements)
+          const hasSelectorErrors = failureMessages.some(
+            (m) =>
+              m.includes("TestingLibraryElementError") ||
+              m.includes("Unable to find") ||
+              m.includes("Found multiple elements"),
+          );
 
-            const implContent = await executor.readFile(adaptPath);
-            const testContent = await executor.readFile(fileResult.filePath.replace(executor.dir + "/", ""));
-            const fixed = await repairTestFailure(
-              adaptPath,
-              implContent,
-              fileResult.filePath.replace(executor.dir + "/", ""),
+          if (hasSelectorErrors) {
+            // Cross-file repair: fix the test file using component context
+            const componentFiles = new Map<string, string>();
+            for (const ap of adaptPaths) {
+              if (!ap.includes(".test.") && !ap.includes("__tests__")) {
+                componentFiles.set(ap, await executor.readFile(ap));
+              }
+            }
+            const testContent = await executor.readFile(testRelPath);
+            const fixedTest = await repairTestSelectors(
+              testRelPath,
               testContent,
+              componentFiles,
               failureMessages,
             );
-            if (fixed !== implContent) {
-              await executor.writeFile(adaptPath, fixed);
+            if (fixedTest !== testContent) {
+              await executor.writeFile(testRelPath, fixedTest);
               repaired = true;
+            }
+          } else {
+            // Standard repair: fix implementation files
+            for (const adaptPath of adaptPaths) {
+              if (adaptPath.includes(".test.") || adaptPath.includes("__tests__")) continue;
+
+              const implContent = await executor.readFile(adaptPath);
+              const testContent = await executor.readFile(testRelPath);
+              const fixed = await repairTestFailure(
+                adaptPath,
+                implContent,
+                testRelPath,
+                testContent,
+                failureMessages,
+              );
+              if (fixed !== implContent) {
+                await executor.writeFile(adaptPath, fixed);
+                repaired = true;
+              }
             }
           }
         }
 
         if (repaired) {
           repairRounds++;
-          // Re-check tsc after test repairs
+          // Re-check tsc after repairs
           const recheckTsc = await executor.tscCheck();
           if (recheckTsc.exitCode !== 0) {
             tscPass = false;
@@ -132,11 +161,51 @@ export async function validateRemix(
           vitestPass = vitestResult.exitCode === 0;
         }
       } catch {
-        errors.push("Failed to parse vitest output for repair");
+        // vitest crashed before producing parseable JSON — try raw output repair
+        const rawOutput = vitestResult.stderr || vitestResult.stdout;
+        const rawErrors = rawOutput.slice(0, 2000);
+
+        const hasSelectorErrors =
+          rawOutput.includes("TestingLibraryElementError") ||
+          rawOutput.includes("Unable to find") ||
+          rawOutput.includes("Found multiple elements");
+
+        if (hasSelectorErrors && repairRounds < maxRepairRounds) {
+          const componentFiles = new Map<string, string>();
+          for (const ap of adaptPaths) {
+            if (!ap.includes(".test.") && !ap.includes("__tests__")) {
+              componentFiles.set(ap, await executor.readFile(ap));
+            }
+          }
+          const testPath = [...adaptPaths].find(
+            (p) => p.includes(".test.") || p.includes("__tests__"),
+          );
+          if (testPath) {
+            const testContent = await executor.readFile(testPath);
+            const fixedTest = await repairTestSelectors(
+              testPath,
+              testContent,
+              componentFiles,
+              [rawErrors],
+            );
+            if (fixedTest !== testContent) {
+              await executor.writeFile(testPath, fixedTest);
+              repairRounds++;
+              const recheckTsc = await executor.tscCheck();
+              if (recheckTsc.exitCode !== 0) tscPass = false;
+              vitestResult = await executor.vitestRun();
+              vitestPass = vitestResult.exitCode === 0;
+            }
+          }
+        }
+
+        if (!vitestPass) {
+          errors.push(`vitest failed (unparseable output): ${rawErrors.slice(0, 300)}`);
+        }
       }
     }
 
-    if (!vitestPass) {
+    if (!vitestPass && errors.length === 0) {
       try {
         const testResults = parseTestResults(vitestResult.stdout);
         for (const fileResult of testResults) {

@@ -7,7 +7,7 @@ import type { Brief, TokenUsage } from "./types.js";
 import { ADAPT_SYSTEM_PROMPT, buildAdaptPrompt } from "./adapt-skeleton-prompts.js";
 
 const SONNET_MODEL = "claude-sonnet-4-20250514";
-const MAX_TOKENS = 8192;
+const MAX_TOKENS = 16384;
 
 export async function adaptSkeleton(
   loaded: LoadedSkeleton,
