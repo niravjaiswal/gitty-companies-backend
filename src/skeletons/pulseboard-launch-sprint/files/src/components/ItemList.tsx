@@ -1,11 +1,11 @@
 import type { LaunchTask } from '../App';
 
-interface LaunchTaskListProps {
+interface ItemListProps {
   tasks: LaunchTask[];
   getStatusLabel: (status: LaunchTask['status']) => string;
 }
 
-export function LaunchTaskList({ tasks, getStatusLabel }: LaunchTaskListProps) {
+export function ItemList({ tasks, getStatusLabel }: ItemListProps) {
   return (
     <div className="task-list">
       {tasks.map((task) => (

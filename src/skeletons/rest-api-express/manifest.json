@@ -4,7 +4,7 @@
     { "path": "package.json", "role": "provided", "adapt": false, "purpose": "NPM dependencies and scripts" },
     { "path": "tsconfig.json", "role": "provided", "adapt": false, "purpose": "TypeScript compiler options" },
     { "path": "vitest.config.ts", "role": "provided", "adapt": false, "purpose": "Vitest configuration" },
-    { "path": "src/app.ts", "role": "provided", "adapt": true, "purpose": "Express app setup with middleware" },
+    { "path": "src/app.ts", "role": "provided", "adapt": false, "purpose": "Express app setup with middleware" },
     { "path": "src/server.ts", "role": "provided", "adapt": false, "purpose": "Server entry point" },
     { "path": "src/routes/tasks.ts", "role": "partial", "adapt": true, "purpose": "Task CRUD routes — PUT endpoint is stubbed for candidate" },
     { "path": "src/__tests__/tasks.test.ts", "role": "provided", "adapt": true, "purpose": "Vitest + supertest test suite for all task endpoints" }

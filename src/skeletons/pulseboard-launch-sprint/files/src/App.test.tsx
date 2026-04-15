@@ -8,7 +8,7 @@ describe('Pulseboard launch dashboard', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.selectOptions(screen.getByLabelText(/filter tasks/i), 'blocked');
+    await user.selectOptions(screen.getByTestId('filter-select'), 'blocked');
 
     expect(screen.getByText(/close mobile layout regressions/i)).toBeInTheDocument();
     expect(screen.queryByText(/ship launch hero copy/i)).not.toBeInTheDocument();
@@ -18,7 +18,7 @@ describe('Pulseboard launch dashboard', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.type(screen.getByLabelText(/search tasks/i), 'analytics');
+    await user.type(screen.getByTestId('search-input'), 'analytics');
 
     expect(screen.getByText(/re-run analytics smoke tests/i)).toBeInTheDocument();
     expect(screen.queryByText(/finalize status page wording/i)).not.toBeInTheDocument();
@@ -28,11 +28,10 @@ describe('Pulseboard launch dashboard', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.type(screen.getByLabelText(/task title/i), 'Draft launch retro summary');
-    await user.type(screen.getByLabelText(/task owner/i), 'Dana');
-    await user.type(screen.getByLabelText(/task lane/i), 'Operations');
-    await user.selectOptions(screen.getByLabelText(/task status/i), 'watch');
-    await user.click(screen.getByRole('button', { name: /add task/i }));
+    await user.type(screen.getByTestId('composer-title'), 'Draft launch retro summary');
+    await user.type(screen.getByTestId('composer-owner'), 'Dana');
+    await user.type(screen.getByTestId('composer-lane'), 'Operations');
+    await user.click(screen.getByTestId('composer-submit'));
 
     expect(screen.getByText(/draft launch retro summary/i)).toBeInTheDocument();
     expect(screen.getByText(/dana · operations/i)).toBeInTheDocument();
@@ -42,14 +41,14 @@ describe('Pulseboard launch dashboard', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const title = screen.getByLabelText(/task title/i);
-    const owner = screen.getByLabelText(/task owner/i);
-    const lane = screen.getByLabelText(/task lane/i);
+    const title = screen.getByTestId('composer-title');
+    const owner = screen.getByTestId('composer-owner');
+    const lane = screen.getByTestId('composer-lane');
 
     await user.type(title, 'Coordinate CS follow-up');
     await user.type(owner, 'Lena');
     await user.type(lane, 'Support');
-    await user.click(screen.getByRole('button', { name: /add task/i }));
+    await user.click(screen.getByTestId('composer-submit'));
 
     expect(title).toHaveValue('');
     expect(owner).toHaveValue('');

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import './styles.css';
-import { LaunchComposer } from './components/LaunchComposer';
-import { LaunchTaskList } from './components/LaunchTaskList';
+import { Composer } from './components/Composer';
+import { ItemList } from './components/ItemList';
 import { MetricGrid } from './components/MetricGrid';
 import { SidebarSummary } from './components/SidebarSummary';
 import { TimelineFeed } from './components/TimelineFeed';
@@ -46,7 +46,7 @@ export default function App() {
   const readyCount = tasks.filter((task) => task.status === 'ready').length;
   const launchPercent = Math.round((readyCount / tasks.length) * 100);
 
-  function handleAddTask(input: { title: string; owner: string; lane: string; status: LaunchStatus }) {
+  function handleAddTask(input: { title: string; owner: string; lane: string; status: string }) {
     if (!input.title || !input.owner || !input.lane) {
       setComposerError('Title, owner, and lane are required.');
       return false;
@@ -54,9 +54,10 @@ export default function App() {
 
     setComposerError('');
 
-    // TODO: replace this stub with real task creation.
-    // The assessment expects new tasks to appear in the list and participate in search + filtering.
-    console.info('Pending task creation', input);
+    setTasks((prev) => [
+      ...prev,
+      { id: Math.max(0, ...prev.map((t) => t.id)) + 1, ...input, status: input.status as LaunchStatus },
+    ]);
     return true;
   }
 
@@ -90,6 +91,7 @@ export default function App() {
               </div>
               <div className="toolbar">
                 <input
+                  data-testid="search-input"
                   aria-label="Search tasks"
                   className="search"
                   placeholder="Search owner, lane, or task"
@@ -97,6 +99,7 @@ export default function App() {
                   onChange={(event) => setQuery(event.target.value)}
                 />
                 <select
+                  data-testid="filter-select"
                   aria-label="Filter tasks"
                   className="select"
                   value={filter}
@@ -110,8 +113,8 @@ export default function App() {
               </div>
             </div>
 
-            <LaunchComposer onAddTask={handleAddTask} errorMessage={composerError} />
-            <LaunchTaskList tasks={filteredTasks} getStatusLabel={statusLabel} />
+            <Composer onAddTask={handleAddTask} errorMessage={composerError} />
+            <ItemList tasks={filteredTasks} getStatusLabel={statusLabel} />
           </section>
 
           <section className="panel activity-panel">

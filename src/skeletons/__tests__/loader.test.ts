@@ -18,7 +18,7 @@ describe("loadSkeleton", () => {
       "Pulseboard Launch Sprint",
     );
 
-    expect(loaded.manifest.files.length).toBe(15);
+    expect(loaded.manifest.files.length).toBe(16);
     expect(loaded.manifest.files.find((f) => f.path === "src/App.tsx")?.role).toBe(
       "candidate",
     );
@@ -50,6 +50,6 @@ describe("loadSkeleton", () => {
 
     expect(loaded.files["package.json"]).toContain("pulseboard-launch-sprint");
     expect(loaded.files["src/main.tsx"]).toContain("ReactDOM");
-    expect(loaded.files["src/App.tsx"]).toContain("LaunchComposer");
+    expect(loaded.files["src/App.tsx"]).toContain("Composer");
   });
 });
