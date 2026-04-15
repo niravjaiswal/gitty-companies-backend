@@ -3,11 +3,7 @@ import { SandboxService, type Logger } from '../../external/vercelSandbox/sandbo
 import type { ActivityCollectorManager } from '../activity/activityCollectorManager.js';
 import { SubmissionService } from '../submissions/submissionService.js';
 import { loadConfig } from '../../infra/config/index.js';
-import {
-  AssessmentWorkspaceService,
-  normalizeAuthoringConfig,
-  normalizeStoredWorkspace,
-} from '../assessments/assessmentWorkspace.js';
+import { normalizeStoredWorkspace } from '../assessments/assessmentWorkspace.js';
 
 export type SessionStatus =
   | 'starting'
@@ -62,7 +58,6 @@ export class SessionManager {
   private logger: Logger;
   private collectorManager: ActivityCollectorManager;
   private submissionService: SubmissionService;
-  private workspaceService: AssessmentWorkspaceService;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -70,13 +65,11 @@ export class SessionManager {
     sandboxService: SandboxService,
     logger: Logger,
     collectorManager: ActivityCollectorManager,
-    workspaceService: AssessmentWorkspaceService,
   ) {
     this.supabase = supabase;
     this.sandboxService = sandboxService;
     this.logger = logger;
     this.collectorManager = collectorManager;
-    this.workspaceService = workspaceService;
     this.submissionService = new SubmissionService(supabase, sandboxService, logger);
   }
 
@@ -281,14 +274,11 @@ export class SessionManager {
       .select(
         [
           'id',
-          'title',
-          'summary',
-          'instructions_md',
-          'source_brief',
-          'authoring_config',
           'workspace_files',
           'workspace_entry_file',
           'workspace_generated_at',
+          'generation_status',
+          'generation_error',
         ].join(', '),
       )
       .eq('id', assessmentId)
@@ -310,38 +300,19 @@ export class SessionManager {
       return existingWorkspace;
     }
 
-    this.logger.info(`Generating missing workspace for assessment ${assessmentId} on session start`);
+    // Workspace is empty — check generation status
+    const generationStatus = assessment.generation_status as string | null;
 
-    const generatedWorkspace = await this.workspaceService.generate({
-      title: (assessment.title as string) ?? 'Technical Assessment',
-      summary: (assessment.summary as string) ?? '',
-      instructionsMd: (assessment.instructions_md as string) ?? '',
-      sourceBrief: (assessment.source_brief as string) ?? '',
-      authoringConfig: normalizeAuthoringConfig(assessment.authoring_config),
-    });
-
-    const { data: updatedAssessmentRow, error: updateError } = await this.supabase
-      .from('assessments')
-      .update({
-        workspace_files: generatedWorkspace.files,
-        workspace_entry_file: generatedWorkspace.entryFilePath,
-        workspace_generated_at: generatedWorkspace.generatedAt,
-      })
-      .eq('id', assessmentId)
-      .select('workspace_files, workspace_entry_file, workspace_generated_at')
-      .single();
-
-    if (updateError || !updatedAssessmentRow) {
-      throw new Error(`Failed to persist generated workspace for assessment ${assessmentId}`);
+    if (generationStatus === 'pending' || generationStatus === 'processing') {
+      throw new Error('Workspace is still being generated. Please try again shortly.');
     }
 
-    const updatedAssessment = updatedAssessmentRow as unknown as Record<string, unknown>;
+    if (generationStatus === 'failed') {
+      const generationError = (assessment.generation_error as string) ?? 'Unknown error';
+      throw new Error(`Workspace generation failed: ${generationError}`);
+    }
 
-    return normalizeStoredWorkspace(
-      updatedAssessment.workspace_files,
-      updatedAssessment.workspace_entry_file,
-      updatedAssessment.workspace_generated_at,
-    );
+    throw new Error('No workspace available for this assessment');
   }
 
   async reconnectSession(sessionId: string): Promise<Session | null> {

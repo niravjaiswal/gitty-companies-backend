@@ -1,8 +1,4 @@
 import { posix } from 'node:path';
-import { extractSpec } from '../../../pipeline/stage1/extract-spec.js';
-import { designScenario } from '../../../pipeline/stage2/design-scenario.js';
-import { generateRepo } from '../../../pipeline/stage3/generate-repo.js';
-import { validateRepo } from '../../../pipeline/stage4/validate-repo.js';
 import { buildDemoWorkspace } from './demoWorkspace.js';
 
 export interface AssessmentStageConfig {
@@ -203,12 +199,6 @@ export function buildAssessmentGenerationPrompt(
   return sections.join('\n\n');
 }
 
-function filesToRecord(files: Map<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    [...files.entries()].sort(([left], [right]) => left.localeCompare(right)),
-  );
-}
-
 export class AssessmentWorkspaceService {
   async generate(
     input: AssessmentWorkspaceGenerationInput,
@@ -220,21 +210,9 @@ export class AssessmentWorkspaceService {
       });
     }
 
-    const prompt = buildAssessmentGenerationPrompt(input);
-    const spec = await extractSpec(prompt);
-    const scenario = await designScenario(spec);
-    const repo = await generateRepo(scenario, spec);
-    const validated = await validateRepo(repo, scenario, spec);
-    const files = filesToRecord(validated.files);
-
-    if (Object.keys(files).length === 0) {
-      throw new Error('Assessment workspace generation returned no files');
-    }
-
-    return {
-      files,
-      entryFilePath: chooseWorkspaceEntryFile(Object.keys(files)),
-      generatedAt: new Date().toISOString(),
-    };
+    throw new Error(
+      'Live workspace generation is handled by the async generation queue. ' +
+      'Set generation_status to "pending" on the assessment row instead.',
+    );
   }
 }

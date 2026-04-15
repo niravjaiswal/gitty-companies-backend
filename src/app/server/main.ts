@@ -10,6 +10,7 @@ import { sandboxRoutes } from '../modules/sessions/sessionRoutes.js';
 import { activityRoutes } from '../modules/activity/activityRoutes.js';
 import { assessmentRoutes } from '../modules/assessments/assessmentRoutes.js';
 import { AssessmentWorkspaceService } from '../modules/assessments/assessmentWorkspace.js';
+import { GenerationQueue } from '../modules/generation/generationQueue.js';
 
 const config = loadConfig();
 const fastify = Fastify({
@@ -25,8 +26,8 @@ const sessionManager = new SessionManager(
   sandboxService,
   fastify.log,
   collectorManager,
-  workspaceService,
 );
+const generationQueue = new GenerationQueue(supabaseAdmin, fastify.log);
 
 // Register CORS (needed for frontend on port 8080 → backend on port 4000)
 fastify.register(cors, {
@@ -53,6 +54,7 @@ sessionManager.startCleanupInterval();
 
 // Graceful shutdown: destroy sandboxes and stop collectors
 fastify.addHook('onClose', async () => {
+  await generationQueue.stop();
   sessionManager.stopCleanupInterval();
   await collectorManager.stopAll();
   await sessionManager.stopAllSessions();
@@ -73,6 +75,7 @@ const start = async () => {
     await sessionManager.cleanupOrphanedSessions();
 
     await fastify.listen({ port: config.port, host: '0.0.0.0' });
+    generationQueue.start();
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

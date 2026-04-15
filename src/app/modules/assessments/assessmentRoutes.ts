@@ -60,10 +60,15 @@ function serializeAssessment(
     createdAt: assessment.created_at,
     updatedAt: assessment.updated_at,
     sourceBrief: assessment.source_brief ?? '',
+    skeletonId: assessment.skeleton_id ?? null,
     authoringConfig: normalizeAuthoringConfig(assessment.authoring_config),
     workspaceFileCount: Object.keys(workspace.files).length,
     workspaceEntryFile: workspace.entryFilePath || null,
     workspaceGeneratedAt: workspace.generatedAt,
+    generationStatus: assessment.generation_status ?? null,
+    generationError: assessment.generation_error ?? null,
+    generationStartedAt: assessment.generation_started_at ?? null,
+    generationCompletedAt: assessment.generation_completed_at ?? null,
     ...(options?.includeWorkspaceFiles
       ? {
           workspaceFiles: workspace.files,
@@ -257,6 +262,7 @@ export async function assessmentRoutes(
       instructionsMd: string;
       durationMinutes: number;
       sourceBrief?: string;
+      skeletonId?: string;
       authoringConfig?: AssessmentAuthoringConfig;
       status?: 'draft' | 'published';
       generateWorkspace?: boolean;
@@ -276,6 +282,7 @@ export async function assessmentRoutes(
             instructionsMd: { type: 'string', minLength: 10 },
             durationMinutes: { type: 'integer', minimum: 1, maximum: 480 },
             sourceBrief: { type: 'string', maxLength: 6000 },
+            skeletonId: { type: 'string', maxLength: 120 },
             authoringConfig: {
               type: 'object',
               properties: {
@@ -325,7 +332,9 @@ export async function assessmentRoutes(
       const instructionsMd = demoCopy?.instructionsMd ?? request.body.instructionsMd.trim();
       const sourceBrief = request.body.sourceBrief?.trim() ?? '';
       const shouldGenerateWorkspace = request.body.generateWorkspace ?? status === 'published';
+      const skeletonId = request.body.skeletonId?.trim() || null;
 
+      // Demo mode: synchronous generation (fast, static files)
       let workspace: {
         files: Record<string, string>;
         entryFilePath: string;
@@ -335,7 +344,7 @@ export async function assessmentRoutes(
         entryFilePath: '',
         generatedAt: null,
       };
-      if (shouldGenerateWorkspace) {
+      if (shouldGenerateWorkspace && demoMode) {
         try {
           workspace = await workspaceService.generate({
             title,
@@ -343,13 +352,16 @@ export async function assessmentRoutes(
             instructionsMd,
             sourceBrief,
             authoringConfig,
-            generationMode: demoMode ? 'demo' : 'live',
+            generationMode: 'demo',
           });
         } catch (error) {
-          fastify.log.error({ error }, 'Failed to generate assessment workspace');
-          return reply.status(502).send({ error: 'Failed to generate assessment workspace' });
+          fastify.log.error({ error }, 'Failed to generate demo workspace');
+          return reply.status(502).send({ error: 'Failed to generate demo workspace' });
         }
       }
+
+      // Non-demo generation: dispatch to async queue
+      const shouldQueueGeneration = shouldGenerateWorkspace && !demoMode;
 
       const supabase = getSupabaseAdmin();
       const { data, error } = await supabase
@@ -362,10 +374,12 @@ export async function assessmentRoutes(
           instructions_md: instructionsMd,
           duration_minutes: request.body.durationMinutes,
           source_brief: sourceBrief,
+          skeleton_id: skeletonId,
           authoring_config: authoringConfig,
           workspace_files: workspace.files,
           workspace_entry_file: workspace.entryFilePath,
           workspace_generated_at: workspace.generatedAt,
+          generation_status: shouldQueueGeneration ? 'pending' : null,
           status,
           published_at: status === 'published' ? new Date().toISOString() : null,
         })
@@ -410,7 +424,8 @@ export async function assessmentRoutes(
         }
       }
 
-      return reply.status(201).send({
+      const responseStatus = shouldQueueGeneration ? 202 : 201;
+      return reply.status(responseStatus).send({
         ...serializeAssessment(data),
         demoMode,
         demoCandidateEmail: shouldSeedDemoAssignment ? requestedDemoEmail : null,
@@ -453,6 +468,7 @@ export async function assessmentRoutes(
       instructionsMd?: string;
       durationMinutes?: number;
       sourceBrief?: string;
+      skeletonId?: string;
       authoringConfig?: AssessmentAuthoringConfig;
       status?: 'draft' | 'published' | 'archived';
       workspaceFiles?: Record<string, string>;
@@ -471,6 +487,7 @@ export async function assessmentRoutes(
             instructionsMd: { type: 'string', minLength: 10 },
             durationMinutes: { type: 'integer', minimum: 1, maximum: 480 },
             sourceBrief: { type: 'string', maxLength: 6000 },
+            skeletonId: { type: 'string', maxLength: 120 },
             authoringConfig: {
               type: 'object',
               properties: {
@@ -532,6 +549,9 @@ export async function assessmentRoutes(
       if (request.body.sourceBrief !== undefined) {
         updates.source_brief = request.body.sourceBrief.trim();
       }
+      if (request.body.skeletonId !== undefined) {
+        updates.skeleton_id = request.body.skeletonId.trim() || null;
+      }
       if (request.body.authoringConfig !== undefined) {
         updates.authoring_config = normalizeAuthoringConfig(request.body.authoringConfig);
       }
@@ -569,34 +589,15 @@ export async function assessmentRoutes(
           request.body.regenerateWorkspace !== false);
 
       if (shouldRegenerateWorkspace) {
-        const nextAuthoringConfig =
-          request.body.authoringConfig !== undefined
-            ? normalizeAuthoringConfig(request.body.authoringConfig)
-            : normalizeAuthoringConfig(existing.authoring_config);
-
-        try {
-          const workspace = await workspaceService.generate({
-            title: typeof updates.title === 'string' ? updates.title : (existing.title as string),
-            summary:
-              typeof updates.summary === 'string' ? updates.summary : (existing.summary as string),
-            instructionsMd:
-              typeof updates.instructions_md === 'string'
-                ? updates.instructions_md
-                : (existing.instructions_md as string),
-            sourceBrief:
-              typeof updates.source_brief === 'string'
-                ? updates.source_brief
-                : ((existing.source_brief as string) ?? ''),
-            authoringConfig: nextAuthoringConfig,
-          });
-
-          updates.workspace_files = workspace.files;
-          updates.workspace_entry_file = workspace.entryFilePath;
-          updates.workspace_generated_at = workspace.generatedAt;
-        } catch (error) {
-          fastify.log.error({ error }, 'Failed to regenerate assessment workspace');
-          return reply.status(502).send({ error: 'Failed to generate assessment workspace' });
-        }
+        // Queue async regeneration instead of blocking
+        updates.generation_status = 'pending';
+        updates.generation_error = null;
+        updates.generation_started_at = null;
+        updates.generation_completed_at = null;
+        // Clear existing workspace so stale files aren't served
+        updates.workspace_files = {};
+        updates.workspace_entry_file = '';
+        updates.workspace_generated_at = null;
       }
 
       const { data, error } = await supabase
