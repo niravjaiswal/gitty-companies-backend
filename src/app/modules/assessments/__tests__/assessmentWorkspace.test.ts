@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildAssessmentGenerationPrompt,
   chooseWorkspaceEntryFile,
-  normalizeAuthoringConfig,
   normalizeStoredWorkspace,
 } from '../assessmentWorkspace.js';
 
@@ -37,34 +35,5 @@ describe('assessmentWorkspace helpers', () => {
         'README.md',
       ]),
     ).toBe('README.md');
-  });
-
-  it('builds a structured generation prompt from the authoring brief', () => {
-    const authoringConfig = normalizeAuthoringConfig({
-      mode: 'multi',
-      stages: [
-        {
-          id: 'stage-1',
-          name: 'Debug API',
-          objective: 'Find and fix regressions',
-          instructionsMd: 'Repair the failing endpoint and keep tests green.',
-        },
-      ],
-    });
-
-    const prompt = buildAssessmentGenerationPrompt({
-      title: 'Senior Backend Engineer',
-      summary: 'Evaluate debugging and test ownership.',
-      instructionsMd: 'Candidates should work in the provided repository.',
-      sourceBrief: 'Create a realistic Express and Vitest exercise.',
-      authoringConfig,
-    });
-
-    expect(prompt).toContain('Senior Backend Engineer');
-    expect(prompt).toContain('Evaluate debugging and test ownership.');
-    expect(prompt).toContain('Create a realistic Express and Vitest exercise.');
-    expect(prompt).toContain('Stage 1: Debug API');
-    expect(prompt).toContain('Repair the failing endpoint and keep tests green.');
-    expect(prompt).toContain('Generate starter application code and the test files');
   });
 });

@@ -5,16 +5,14 @@ import { normalizeEmail } from '../../shared/utils/email.js';
 import { getCompanyMembership } from '../../infra/auth/companyAuth.js';
 import type { SessionManager } from '../sessions/sessionManager.js';
 import {
-  AssessmentWorkspaceService,
   normalizeAuthoringConfig,
   normalizeStoredWorkspace,
   type AssessmentAuthoringConfig,
 } from './assessmentWorkspace.js';
-import { buildDemoAssessmentCopy } from './demoWorkspace.js';
+import { buildDemoAssessmentCopy, buildDemoWorkspace } from './demoWorkspace.js';
 
 interface AssessmentRouteOptions extends FastifyPluginOptions {
   sessionManager: SessionManager;
-  workspaceService: AssessmentWorkspaceService;
 }
 
 function formatAssessmentPersistenceError(error: unknown, fallback: string): string {
@@ -119,7 +117,7 @@ export async function assessmentRoutes(
   fastify: FastifyInstance,
   opts: AssessmentRouteOptions,
 ): Promise<void> {
-  const { sessionManager, workspaceService } = opts;
+  const { sessionManager } = opts;
   fastify.addHook('preHandler', authenticate);
 
   fastify.get('/api/company/me', async (request, reply) => {
@@ -346,14 +344,7 @@ export async function assessmentRoutes(
       };
       if (shouldGenerateWorkspace && demoMode) {
         try {
-          workspace = await workspaceService.generate({
-            title,
-            summary,
-            instructionsMd,
-            sourceBrief,
-            authoringConfig,
-            generationMode: 'demo',
-          });
+          workspace = await buildDemoWorkspace({ title, instructionsMd });
         } catch (error) {
           fastify.log.error({ error }, 'Failed to generate demo workspace');
           return reply.status(502).send({ error: 'Failed to generate demo workspace' });

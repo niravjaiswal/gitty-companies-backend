@@ -1,5 +1,4 @@
 import { posix } from 'node:path';
-import { buildDemoWorkspace } from './demoWorkspace.js';
 
 export interface AssessmentStageConfig {
   id?: string;
@@ -17,15 +16,6 @@ export interface StoredAssessmentWorkspace {
   files: Record<string, string>;
   entryFilePath: string;
   generatedAt: string | null;
-}
-
-export interface AssessmentWorkspaceGenerationInput {
-  title: string;
-  summary: string;
-  instructionsMd: string;
-  sourceBrief: string;
-  authoringConfig: AssessmentAuthoringConfig;
-  generationMode?: 'live' | 'demo';
 }
 
 function normalizeWorkspaceRelativePath(filePath: string): string | null {
@@ -144,75 +134,3 @@ export function normalizeStoredWorkspace(
   };
 }
 
-export function buildAssessmentGenerationPrompt(
-  input: AssessmentWorkspaceGenerationInput,
-): string {
-  const sections: string[] = [
-    'Generate a realistic technical assessment repository for a candidate.',
-    `Assessment title:\n${input.title.trim() || 'Untitled assessment'}`,
-  ];
-
-  if (input.summary.trim()) {
-    sections.push(`Internal hiring summary:\n${input.summary.trim()}`);
-  }
-
-  if (input.sourceBrief.trim()) {
-    sections.push(`Private generation brief:\n${input.sourceBrief.trim()}`);
-  }
-
-  sections.push(`Candidate-facing instructions:\n${input.instructionsMd.trim()}`);
-  sections.push(`Authoring mode: ${input.authoringConfig.mode}`);
-
-  if (input.authoringConfig.stages.length > 0) {
-    const stages = input.authoringConfig.stages
-      .map((stage, index) => {
-        const lines = [`Stage ${index + 1}: ${stage.name}`];
-        if (stage.objective?.trim()) {
-          lines.push(`Objective: ${stage.objective.trim()}`);
-        }
-        lines.push(`Instructions:\n${stage.instructionsMd.trim()}`);
-        return lines.join('\n');
-      })
-      .join('\n\n');
-
-    sections.push(`Internal stage breakdown:\n${stages}`);
-  }
-
-  sections.push(
-    [
-      'Repository requirements:',
-      '- Generate a concrete, runnable starter project instead of a placeholder folder.',
-      '- Always include package.json, a README, source files, and the test files that drive the assessment.',
-      '- Generate starter application code and the test files that evaluate the candidate work.',
-      '- The repository must be ready to open inside VS Code / code-server.',
-      '- Keep the task aligned with the candidate-facing instructions and internal brief.',
-      '- Prefer a focused project that can realistically be completed within the intended assessment window.',
-      '- If the prompt does not explicitly name a stack, default to a small React + TypeScript + Vite project.',
-      '- Do not generate only sandbox/bootstrap plumbing. Generate the actual assessment product code the candidate will work on.',
-      '- The repo should feel like a real mini-product with named features, realistic flows, and existing code the candidate extends.',
-      '- For frontend roles, prefer a creative UI product with concrete features, such as auth, stateful interactions, dashboards, games, collaboration, or workflow tools.',
-      '- For Rust and systems roles, prefer a creative implementation such as a TUI, CLI, event processor, realtime service, parser, or systems utility rather than generic CRUD.',
-      '- Include at least one intentionally incomplete feature and at least one bug or failing test that the candidate must resolve.',
-    ].join('\n'),
-  );
-
-  return sections.join('\n\n');
-}
-
-export class AssessmentWorkspaceService {
-  async generate(
-    input: AssessmentWorkspaceGenerationInput,
-  ): Promise<StoredAssessmentWorkspace> {
-    if (input.generationMode === 'demo') {
-      return await buildDemoWorkspace({
-        title: input.title,
-        instructionsMd: input.instructionsMd,
-      });
-    }
-
-    throw new Error(
-      'Live workspace generation is handled by the async generation queue. ' +
-      'Set generation_status to "pending" on the assessment row instead.',
-    );
-  }
-}

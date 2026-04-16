@@ -9,7 +9,6 @@ import { ActivityCollectorManager } from '../modules/activity/activityCollectorM
 import { sandboxRoutes } from '../modules/sessions/sessionRoutes.js';
 import { activityRoutes } from '../modules/activity/activityRoutes.js';
 import { assessmentRoutes } from '../modules/assessments/assessmentRoutes.js';
-import { AssessmentWorkspaceService } from '../modules/assessments/assessmentWorkspace.js';
 import { GenerationQueue } from '../modules/generation/generationQueue.js';
 
 const config = loadConfig();
@@ -20,7 +19,6 @@ const fastify = Fastify({
 const supabaseAdmin = getSupabaseAdmin();
 const sandboxService = new SandboxService(fastify.log);
 const collectorManager = new ActivityCollectorManager(supabaseAdmin, sandboxService, fastify.log);
-const workspaceService = new AssessmentWorkspaceService();
 const sessionManager = new SessionManager(
   supabaseAdmin,
   sandboxService,
@@ -42,7 +40,7 @@ fastify.register(sandboxRoutes, { sessionManager, sandboxService });
 fastify.register(activityRoutes, { sessionManager });
 
 // Register company/candidate assessment routes
-fastify.register(assessmentRoutes, { sessionManager, workspaceService });
+fastify.register(assessmentRoutes, { sessionManager });
 
 // Health check
 fastify.get('/', async () => {
