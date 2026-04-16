@@ -31,6 +31,14 @@ npm install && tsc --noEmit && vitest run
 - `vitest run` must pass all tests for "provided" files
 - Tests for "candidate" files may exist but are expected to fail (testing stubs)
 
+Commit only the skeleton **source tree + `package-lock.json`**. Do
+**not** commit `files/node_modules/` or `files/dist/` left behind by
+local validation runs — the remix pipeline runs `npm install` inside a
+fresh temp dir via `RepoExecutor`, so those directories are never read
+at runtime and would only bloat the repo (448MB of such waste was
+purged when this rule was introduced). The backend `.gitignore` has an
+explicit guard against this path.
+
 ## Placeholder rules
 
 - `{{variable}}` tokens are allowed ONLY in: `README.md`, `rubric.json`, `skeleton.json` description fields

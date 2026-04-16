@@ -4,3 +4,8 @@ output
 .env
 .env.*
 .gstack/
+
+# Skeletons must ship as source + lockfile only — never commit installed
+# deps or build output from authoring runs.
+src/skeletons/*/files/node_modules/
+src/skeletons/*/files/dist/
