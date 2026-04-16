@@ -9,7 +9,6 @@
     "build": "tsc && cp -r src/app/infra/assets dist/app/infra/",
     "start": "node dist/app/server/main.js",
     "sandbox:snapshot": "tsx --env-file=.env src/scripts/createAssessmentSnapshot.ts",
-    "extract": "tsx --env-file=.env src/pipeline/main.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
