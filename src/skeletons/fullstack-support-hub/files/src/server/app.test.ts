@@ -26,15 +26,17 @@ describe("Northstar Support Hub API", () => {
     expect(response.body.tickets[0].id).toBe("SH-201");
   });
 
-  it("adds a note and returns the refreshed dashboard summary", async () => {
+  it("adds a note and returns the refreshed dashboard payload", async () => {
     const app = createApp();
     const response = await request(app)
       .post("/api/tickets/SH-201/notes")
       .send({ author: "Avery", body: "Waiting on finance for the CSV sample." });
 
     expect(response.status).toBe(201);
-    expect(response.body.ticket.notes).toHaveLength(2);
+    expect(response.body.tickets).toHaveLength(5);
     expect(response.body.summary.openCount).toBeGreaterThan(0);
+    const updated = response.body.tickets.find((t: { id: string }) => t.id === "SH-201");
+    expect(updated?.notes).toHaveLength(2);
   });
 
   it("rejects invalid notes", async () => {

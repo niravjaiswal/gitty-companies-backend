@@ -61,7 +61,7 @@ export function createApp() {
     }
 
     res.status(201).json({
-      ticket,
+      tickets: store.listTickets({}),
       summary: store.getSummary(),
     });
   });
