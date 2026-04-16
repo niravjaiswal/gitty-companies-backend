@@ -4,7 +4,7 @@ import {
   SkillAxisEnum,
   DifficultyEnum,
   EstimatedScopeEnum,
-} from "../pipeline/stage1/spec-schema.js";
+} from "./enums.js";
 
 // ── Language & pattern enums ────────────────────────────────────
 
