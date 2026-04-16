@@ -1,0 +1,23 @@
+{
+  "files": [
+    { "path": "README.md", "role": "provided", "adapt": true, "purpose": "Project overview and candidate instructions" },
+    { "path": "package.json", "role": "provided", "adapt": false, "purpose": "NPM dependencies and scripts" },
+    { "path": "package-lock.json", "role": "provided", "adapt": false, "purpose": "Pinned dependency graph for reproducible installs" },
+    { "path": "vite.config.ts", "role": "provided", "adapt": false, "purpose": "Vite and Vitest configuration" },
+    { "path": "tsconfig.json", "role": "provided", "adapt": false, "purpose": "TypeScript compiler configuration" },
+    { "path": "index.html", "role": "provided", "adapt": true, "purpose": "HTML entry point and document title" },
+    { "path": "src/test/setup.ts", "role": "provided", "adapt": false, "purpose": "Vitest setup that loads jest-dom matchers" },
+    { "path": "src/main.tsx", "role": "provided", "adapt": false, "purpose": "React application bootstrap" },
+    { "path": "src/data.ts", "role": "provided", "adapt": true, "purpose": "Seed order data and status metadata" },
+    { "path": "src/state/orders.ts", "role": "partial", "adapt": true, "purpose": "Reducer, selectors, and order state transitions" },
+    { "path": "src/state/orders.test.ts", "role": "provided", "adapt": true, "purpose": "Reducer unit tests for sorting, transitions, and draft submission" },
+    { "path": "src/components/MetricChip.tsx", "role": "provided", "adapt": true, "purpose": "Compact KPI display used in the hero area" },
+    { "path": "src/components/Toolbar.tsx", "role": "provided", "adapt": true, "purpose": "Search and filter controls for the board" },
+    { "path": "src/components/OrderList.tsx", "role": "provided", "adapt": true, "purpose": "List of orders with priority and status metadata" },
+    { "path": "src/components/OrderDetails.tsx", "role": "provided", "adapt": true, "purpose": "Selected order details and action buttons" },
+    { "path": "src/components/Composer.tsx", "role": "provided", "adapt": true, "purpose": "Controlled form for creating a new order" },
+    { "path": "src/App.tsx", "role": "candidate", "adapt": true, "purpose": "Main application composition and state wiring" },
+    { "path": "src/App.test.tsx", "role": "provided", "adapt": true, "purpose": "Integration tests for filtering, selection, and creation flows" },
+    { "path": "src/styles.css", "role": "provided", "adapt": true, "purpose": "Global styles and visual system" }
+  ]
+}

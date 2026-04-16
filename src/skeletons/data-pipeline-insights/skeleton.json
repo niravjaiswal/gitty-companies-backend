@@ -1,0 +1,21 @@
+{
+  "name": "data-pipeline-insights",
+  "language": "typescript",
+  "pattern": "data-processing",
+  "difficulty_range": { "min": "mid", "max": "senior" },
+  "skill_axes": [
+    "data_pipeline_design",
+    "stream_processing",
+    "async_programming",
+    "testing_strategy",
+    "error_handling"
+  ],
+  "estimated_scope": { "min": "2-4 hours", "max": "4-6 hours" },
+  "domain_tags": ["data_engineering", "backend"],
+  "description": "A TypeScript data-processing assessment that combines batch aggregation, object-mode stream processing, and a CLI report over pipeline telemetry.",
+  "assessment_copy": {
+    "title": "Pipeline Insights Console",
+    "summary": "A TypeScript data-processing assessment where candidates inspect pipeline telemetry, summarize batch runs, and refine stream-based alerting.",
+    "instructions_md": "# Pipeline Insights Console\n\n## Overview\n\nYou are working on a telemetry analysis tool for a data platform that ingests events from batch sync jobs and live streams.\n\nThe project is already scaffolded as a normal TypeScript package. Your job is to understand the batch and streaming code paths, then extend the reporting layer without breaking the existing summaries.\n\n## Core task\n\nImprove the pipeline report in `src/report.ts` so it better combines batch summaries with stream-window insights.\n\nThe code should:\n- summarize event volume, lateness, and failures by pipeline\n- process the same events through an object-mode stream transform\n- surface a deterministic CLI report for the bundled sample data\n- keep the current tests green while preserving the data model\n\n## Candidate workflow\n\n- Read the types and sample telemetry to understand the domain.\n- Run the test suite to see how batch and stream processing are exercised.\n- Update the reporting layer without changing the surrounding project structure.\n- Make sure the CLI output still reads cleanly.\n\n## Commands\n\n```bash\nnpm install\nnpm run dev\nnpm run test\n```\n\n## Notes\n\n- Batch summaries should be stable and reproducible.\n- Stream processing should operate on object-mode events, not raw text.\n- The project is intentionally small, but it models a real analytics workflow."
+  }
+}

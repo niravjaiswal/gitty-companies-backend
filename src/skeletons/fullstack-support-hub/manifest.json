@@ -1,0 +1,24 @@
+{
+  "files": [
+    { "path": "README.md", "role": "provided", "adapt": true, "purpose": "Project overview and candidate instructions" },
+    { "path": "package.json", "role": "provided", "adapt": false, "purpose": "Dependencies and project scripts" },
+    { "path": "package-lock.json", "role": "provided", "adapt": false, "purpose": "Pinned dependency graph for reproducible installs" },
+    { "path": "tsconfig.json", "role": "provided", "adapt": false, "purpose": "TypeScript compiler configuration" },
+    { "path": "vite.config.ts", "role": "provided", "adapt": false, "purpose": "Vite and Vitest configuration" },
+    { "path": "index.html", "role": "provided", "adapt": false, "purpose": "HTML entry point for the React app" },
+    { "path": "src/test/setup.ts", "role": "provided", "adapt": false, "purpose": "Vitest DOM assertions setup" },
+    { "path": "src/main.tsx", "role": "provided", "adapt": false, "purpose": "React bootstrap entry point" },
+    { "path": "src/styles.css", "role": "provided", "adapt": true, "purpose": "Global dashboard styling" },
+    { "path": "src/shared/types.ts", "role": "provided", "adapt": true, "purpose": "Shared support hub domain types" },
+    { "path": "src/shared/seed.ts", "role": "provided", "adapt": true, "purpose": "Seed data for the in-memory support store" },
+    { "path": "src/shared/risk.ts", "role": "partial", "adapt": true, "purpose": "Escalation scoring helper with an intentionally conservative policy" },
+    { "path": "src/shared/summary.ts", "role": "provided", "adapt": true, "purpose": "Dashboard summary aggregation helpers" },
+    { "path": "src/server/store.ts", "role": "provided", "adapt": true, "purpose": "In-memory ticket store and mutation helpers" },
+    { "path": "src/server/app.ts", "role": "provided", "adapt": true, "purpose": "Express app with dashboard and note routes" },
+    { "path": "src/server/main.ts", "role": "provided", "adapt": false, "purpose": "Server entry point for local development" },
+    { "path": "src/client/api.ts", "role": "provided", "adapt": true, "purpose": "Frontend API client for the dashboard" },
+    { "path": "src/App.tsx", "role": "provided", "adapt": true, "purpose": "React support dashboard" },
+    { "path": "src/App.test.tsx", "role": "provided", "adapt": true, "purpose": "React state management and note composer tests" },
+    { "path": "src/server/app.test.ts", "role": "provided", "adapt": true, "purpose": "Express API integration tests" }
+  ]
+}

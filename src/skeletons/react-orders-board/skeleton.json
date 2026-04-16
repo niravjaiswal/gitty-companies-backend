@@ -1,0 +1,15 @@
+{
+  "name": "react-orders-board",
+  "language": "typescript",
+  "pattern": "react-spa",
+  "difficulty_range": { "min": "junior", "max": "mid" },
+  "skill_axes": ["state_management", "ui_component_design", "testing_strategy", "debugging"],
+  "estimated_scope": { "min": "2-4 hours", "max": "4-6 hours" },
+  "domain_tags": ["frontend"],
+  "description": "A polished React orders board built as a real Vite app. The assessment focuses on reducer-driven state management, filtered views, and order lifecycle actions.",
+  "assessment_copy": {
+    "title": "Northstar Orders Board",
+    "summary": "A React + TypeScript assessment built as a realistic fulfillment dashboard with reducer-driven state and interactive order workflows.",
+    "instructions_md": "# Northstar Orders Board\n\n## Overview\n\nYou are stepping into Northstar Commerce, where operations teams track same-day fulfillment across a live order board.\n\nThe repo is already scaffolded as a normal React + TypeScript + Vite app. Your job is to keep the board state in sync as orders are searched, filtered, selected, and updated.\n\n## Core task\n\nStabilize the reducer-driven order board so the interface behaves like a real operations tool.\n\nYou should:\n- keep urgent orders pinned ahead of standard orders\n- preserve the selected order while the board updates\n- advance an order through the fulfillment pipeline\n- create a new order from the composer and clear the draft fields\n- keep counts, search, and filters aligned with the underlying state\n\n## Candidate workflow\n\n- Explore the codebase and understand how state flows through the board.\n- Run the app locally in the sandbox.\n- Run the tests to verify current behavior.\n- Implement the missing state logic and leave the tests passing.\n- Submit the assessment when you are done.\n\n## Sandbox commands\n\n```bash\nnpm install\nnpm run dev -- --host 0.0.0.0 --port 3000\nnpm run test\n```\n\n## Product context\n\n- The left rail summarizes queue health and order pressure.\n- The board shows active orders grouped by status.\n- The details panel lets dispatchers advance a selected order.\n- The composer is intentionally central to the assessment and touches the reducer.\n- The interface should feel like a real internal tool, not a toy demo.\n\n## Submission\n\n- Keep the repo runnable.\n- Keep the tests green.\n- Preserve the board layout while fixing the state transitions."
+  }
+}

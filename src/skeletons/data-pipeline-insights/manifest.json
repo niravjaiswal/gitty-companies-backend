@@ -1,0 +1,19 @@
+{
+  "files": [
+    { "path": "README.md", "role": "provided", "adapt": true, "purpose": "Project overview and candidate instructions" },
+    { "path": "package.json", "role": "provided", "adapt": false, "purpose": "Package metadata, dependencies, and scripts" },
+    { "path": "package-lock.json", "role": "provided", "adapt": false, "purpose": "Pinned dependency graph for reproducible installs" },
+    { "path": "tsconfig.json", "role": "provided", "adapt": false, "purpose": "TypeScript compiler configuration" },
+    { "path": "vitest.config.ts", "role": "provided", "adapt": false, "purpose": "Vitest configuration" },
+    { "path": "src/types.ts", "role": "provided", "adapt": true, "purpose": "Shared telemetry and reporting types" },
+    { "path": "src/data.ts", "role": "provided", "adapt": true, "purpose": "Sample pipeline telemetry used by the CLI and tests" },
+    { "path": "src/batch.ts", "role": "provided", "adapt": true, "purpose": "Batch aggregation helpers for pipeline telemetry" },
+    { "path": "src/stream.ts", "role": "provided", "adapt": true, "purpose": "Object-mode stream transform for windowed insights" },
+    { "path": "src/report.ts", "role": "candidate", "adapt": true, "purpose": "High-level report assembly that combines batch and stream insights" },
+    { "path": "src/cli.ts", "role": "provided", "adapt": true, "purpose": "CLI entry point that prints the pipeline insights report" },
+    { "path": "src/__tests__/batch.test.ts", "role": "provided", "adapt": true, "purpose": "Tests for batch aggregation behavior" },
+    { "path": "src/__tests__/stream.test.ts", "role": "provided", "adapt": true, "purpose": "Tests for windowed stream processing" },
+    { "path": "src/__tests__/report.test.ts", "role": "provided", "adapt": true, "purpose": "Tests for report assembly and rendering" },
+    { "path": "src/__tests__/cli.test.ts", "role": "provided", "adapt": true, "purpose": "Tests for the CLI rendering path" }
+  ]
+}

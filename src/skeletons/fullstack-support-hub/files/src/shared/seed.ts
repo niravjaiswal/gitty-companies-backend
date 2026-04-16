@@ -1,0 +1,110 @@
+import type { SupportTicket } from "./types.js";
+
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+export const seedTickets: SupportTicket[] = [
+  {
+    id: "SH-201",
+    subject: "Billing export is missing line-item tax",
+    customer: "Northwind Labs",
+    status: "waiting",
+    priority: "high",
+    channel: "email",
+    assignee: "Mara",
+    summary: "Finance reports show a mismatch after the latest reconciliation export.",
+    tags: ["billing", "finance"],
+    createdAt: minutesAgo(410),
+    updatedAt: minutesAgo(255),
+    notes: [
+      {
+        id: "note-1",
+        author: "Mara",
+        body: "Asked finance to share a sample CSV and the exact mismatch total.",
+        createdAt: minutesAgo(255),
+        internal: true,
+      },
+    ],
+  },
+  {
+    id: "SH-205",
+    subject: "Mobile upload spinner never clears",
+    customer: "Brightside Health",
+    status: "open",
+    priority: "urgent",
+    channel: "phone",
+    assignee: "Jun",
+    summary: "Users on mobile see a persistent spinner after attaching files.",
+    tags: ["mobile", "upload", "vip"],
+    createdAt: minutesAgo(145),
+    updatedAt: minutesAgo(88),
+    notes: [
+      {
+        id: "note-2",
+        author: "Jun",
+        body: "Confirmed the issue on iOS and asked for a repro clip.",
+        createdAt: minutesAgo(88),
+        internal: true,
+      },
+    ],
+  },
+  {
+    id: "SH-208",
+    subject: "Portal invites expire too quickly",
+    customer: "Ledgerline",
+    status: "waiting",
+    priority: "medium",
+    channel: "portal",
+    assignee: "Rin",
+    summary: "A customer success manager flagged repeated invite resets for one account.",
+    tags: ["identity", "onboarding"],
+    createdAt: minutesAgo(285),
+    updatedAt: minutesAgo(190),
+    notes: [],
+  },
+  {
+    id: "SH-214",
+    subject: "Webhook retries are flooding logs",
+    customer: "Aster Freight",
+    status: "open",
+    priority: "high",
+    channel: "chat",
+    assignee: "Talia",
+    summary: "The integration team needs a quieter retry policy for a noisy endpoint.",
+    tags: ["integrations", "ops"],
+    createdAt: minutesAgo(95),
+    updatedAt: minutesAgo(42),
+    notes: [
+      {
+        id: "note-3",
+        author: "Talia",
+        body: "Collected request IDs and started a replay trace.",
+        createdAt: minutesAgo(42),
+        internal: false,
+      },
+    ],
+  },
+  {
+    id: "SH-219",
+    subject: "Resolved ticket still appears in the queue",
+    customer: "Cobalt Works",
+    status: "resolved",
+    priority: "low",
+    channel: "email",
+    assignee: "Mara",
+    summary: "A stale dashboard row is confusing the support lead after closure.",
+    tags: ["ui", "regression"],
+    createdAt: minutesAgo(620),
+    updatedAt: minutesAgo(28),
+    notes: [
+      {
+        id: "note-4",
+        author: "Mara",
+        body: "Marked resolved after a frontend cache refresh.",
+        createdAt: minutesAgo(28),
+        internal: true,
+      },
+    ],
+  },
+];
