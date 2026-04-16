@@ -57,33 +57,9 @@ Each file in `manifest.json` has:
 
 ### Adapt flag
 
-- `adapt: true` — File is sent to the LLM during remix. The LLM returns a full replacement.
-- `adapt: false` — File is NEVER sent to the LLM. `apply-patch` rejects any patches targeting static files. Use for: config files (`tsconfig.json`, `vitest.config.ts`, `package.json`), test harness setup, and structural plumbing that must not change.
+- `adapt: true` — The agent may edit this file during remix.
+- `adapt: false` — The agent must not modify this file. Use for: config files (`tsconfig.json`, `vitest.config.ts`, `package.json`), test harness setup, and structural plumbing that must not change.
 
-## Patch format
+## Remix output
 
-The remix engine outputs a JSON object validated against `RemixPatchSchema`:
-
-```json
-{
-  "scenario": {
-    "title": "...",
-    "company_name": "...",
-    "narrative": "..."
-  },
-  "file_patches": [
-    {
-      "path": "src/types/index.ts",
-      "action": "replace_content",
-      "content": "// Full adapted file content..."
-    }
-  ],
-  "tasks": [...],
-  "rubric": [...]
-}
-```
-
-- Each `file_patches` entry contains the COMPLETE adapted file content (not diffs)
-- Only files with `adapt: true` in the manifest are valid patch targets
-- Patches for unknown paths or static files are rejected
-- Missing patches for adapt-marked files generate a warning (the file keeps its original content)
+The agent edits the skeleton in a temporary working directory and returns the final file map alongside a `scenario`, `tasks`, and `rubric` it composed for the candidate. Only files with `adapt: true` in the manifest may be modified; static files are copied through unchanged.

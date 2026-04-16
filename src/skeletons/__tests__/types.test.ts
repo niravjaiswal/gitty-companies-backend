@@ -3,8 +3,6 @@ import {
   SkeletonSchema,
   ManifestSchema,
   ManifestFileEntrySchema,
-  RemixPatchSchema,
-  FilePatchEntrySchema,
 } from "../types.js";
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -39,26 +37,6 @@ function validManifest(overrides: Record<string, unknown> = {}) {
         purpose: "TypeScript compiler config",
       },
     ],
-    ...overrides,
-  };
-}
-
-function validPatch(overrides: Record<string, unknown> = {}) {
-  return {
-    scenario: {
-      title: "Quentra Logistics Dashboard",
-      company_name: "Quentra",
-      narrative: "You're joining Quentra's platform team...",
-    },
-    file_patches: [
-      {
-        path: "src/App.tsx",
-        action: "replace_content",
-        content: "// Adapted content",
-      },
-    ],
-    tasks: [{ title: "Implement shipping tracker", description: "Build the UI" }],
-    rubric: [{ criterion: "Component design", weight: 0.4 }],
     ...overrides,
   };
 }
@@ -220,90 +198,3 @@ describe("ManifestSchema", () => {
   });
 });
 
-// ── RemixPatchSchema ────────────────────────────────────────────
-
-describe("RemixPatchSchema", () => {
-  it("validates a well-formed patch", () => {
-    const result = RemixPatchSchema.safeParse(validPatch());
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects missing scenario title", () => {
-    const result = RemixPatchSchema.safeParse(
-      validPatch({
-        scenario: { title: "", company_name: "Quentra", narrative: "..." },
-      }),
-    );
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects missing company_name", () => {
-    const result = RemixPatchSchema.safeParse(
-      validPatch({
-        scenario: { title: "Test", company_name: "", narrative: "..." },
-      }),
-    );
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects invalid patch action", () => {
-    const result = FilePatchEntrySchema.safeParse({
-      path: "src/App.tsx",
-      action: "delete",
-      content: "",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("accepts empty content (file cleared)", () => {
-    const result = FilePatchEntrySchema.safeParse({
-      path: "src/App.tsx",
-      action: "replace_content",
-      content: "",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects empty patch path", () => {
-    const result = FilePatchEntrySchema.safeParse({
-      path: "",
-      action: "replace_content",
-      content: "// content",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("validates patch with multiple file entries", () => {
-    const result = RemixPatchSchema.safeParse(
-      validPatch({
-        file_patches: [
-          { path: "src/App.tsx", action: "replace_content", content: "// A" },
-          { path: "src/types/index.ts", action: "replace_content", content: "// B" },
-          { path: "src/data.ts", action: "replace_content", content: "// C" },
-        ],
-      }),
-    );
-    expect(result.success).toBe(true);
-  });
-
-  it("validates patch with empty file_patches (no files changed)", () => {
-    const result = RemixPatchSchema.safeParse(
-      validPatch({ file_patches: [] }),
-    );
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects rubric weight above 1", () => {
-    const result = RemixPatchSchema.safeParse(
-      validPatch({ rubric: [{ criterion: "Design", weight: 1.5 }] }),
-    );
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects rubric weight below 0", () => {
-    const result = RemixPatchSchema.safeParse(
-      validPatch({ rubric: [{ criterion: "Design", weight: -0.1 }] }),
-    );
-    expect(result.success).toBe(false);
-  });
-});

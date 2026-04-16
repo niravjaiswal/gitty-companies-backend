@@ -3,8 +3,6 @@ export {
   SkeletonSchema,
   ManifestSchema,
   AssessmentCopySchema,
-  RemixPatchSchema,
-  FilePatchEntrySchema,
   ManifestFileEntrySchema,
   FileRoleEnum,
   SkeletonLanguageEnum,
@@ -18,7 +16,5 @@ export type {
   FileRole,
   SkeletonLanguage,
   SkeletonPattern,
-  FilePatchEntry,
-  RemixPatch,
   LoadedSkeleton,
 } from "./types.js";

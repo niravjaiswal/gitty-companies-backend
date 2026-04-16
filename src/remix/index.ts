@@ -1,14 +1,15 @@
 export { remix } from "./remix.js";
 export { extractBrief } from "./extract-brief.js";
-export { adaptSkeleton } from "./adapt-skeleton.js";
-export { applyPatch } from "./apply-patch.js";
-export { validateRemix } from "./validate-remix.js";
 
 export type {
   Brief,
   TokenUsage,
+  AgentUsage,
   ValidationReport,
   RemixedWorkspace,
+  RemixScenario,
+  RemixTask,
+  RemixRubricEntry,
   RemixOptions,
   RemixResult,
 } from "./types.js";

@@ -70,39 +70,6 @@ export const SkeletonSchema = z.object({
   assessment_copy: AssessmentCopySchema.optional(),
 });
 
-// ── Patch format (output of adapt-skeleton) ─────────────────────
-//
-// Full-file replacement. Each entry replaces the entire content of
-// a file in the skeleton. Only files marked adapt: true in the
-// manifest are valid patch targets.
-
-export const FilePatchEntrySchema = z.object({
-  path: z.string().min(1),
-  action: z.literal("replace_content"),
-  content: z.string(),
-});
-
-export const RemixPatchSchema = z.object({
-  scenario: z.object({
-    title: z.string().min(1),
-    company_name: z.string().min(1),
-    narrative: z.string().min(1),
-  }),
-  file_patches: z.array(FilePatchEntrySchema),
-  tasks: z.array(
-    z.object({
-      title: z.string().min(1),
-      description: z.string().min(1),
-    }),
-  ),
-  rubric: z.array(
-    z.object({
-      criterion: z.string().min(1),
-      weight: z.number().min(0).max(1),
-    }),
-  ),
-});
-
 // ── Inferred types ──────────────────────────────────────────────
 
 export type SkeletonLanguage = z.infer<typeof SkeletonLanguageEnum>;
@@ -112,8 +79,6 @@ export type ManifestFileEntry = z.infer<typeof ManifestFileEntrySchema>;
 export type Manifest = z.infer<typeof ManifestSchema>;
 export type AssessmentCopy = z.infer<typeof AssessmentCopySchema>;
 export type Skeleton = z.infer<typeof SkeletonSchema>;
-export type FilePatchEntry = z.infer<typeof FilePatchEntrySchema>;
-export type RemixPatch = z.infer<typeof RemixPatchSchema>;
 
 export type LoadedSkeleton = {
   skeleton: Skeleton;

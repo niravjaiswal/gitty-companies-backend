@@ -12,10 +12,35 @@ const FRONTEND_KEYWORDS = [
   'dashboard', 'component', 'design system',
 ];
 
-function chooseSkeleton(sourceBrief: string): string {
+const FULLSTACK_KEYWORDS = [
+  'fullstack', 'full-stack', 'end-to-end', 'api + react', 'api and react',
+  'frontend and backend', 'front-end and back-end', 'portal', 'customer support',
+];
+
+const DATA_KEYWORDS = [
+  'data pipeline', 'pipeline', 'etl', 'stream', 'streaming', 'batch',
+  'ingestion', 'transform', 'aggregation', 'analytics', 'warehouse',
+  'events', 'metrics', 'data processing',
+];
+
+const CLI_KEYWORDS = [
+  'cli', 'command line', 'terminal', 'shell', 'console', 'ops',
+  'audit', 'log files', 'incident', 'developer tooling',
+];
+
+export function chooseSkeleton(sourceBrief: string): string {
   const lower = sourceBrief.toLowerCase();
+  if (FULLSTACK_KEYWORDS.some((kw) => lower.includes(kw))) {
+    return 'fullstack-support-hub';
+  }
+  if (DATA_KEYWORDS.some((kw) => lower.includes(kw))) {
+    return 'data-pipeline-insights';
+  }
+  if (CLI_KEYWORDS.some((kw) => lower.includes(kw))) {
+    return 'ops-cli-audit';
+  }
   if (FRONTEND_KEYWORDS.some((kw) => lower.includes(kw))) {
-    return 'pulseboard-launch-sprint';
+    return 'react-orders-board';
   }
   return 'rest-api-express';
 }
@@ -129,7 +154,6 @@ export class GenerationQueue {
       const result = await remix({
         skeletonId,
         jobBrief,
-        useAgent: true,
       });
 
       const files = result.workspace.files;

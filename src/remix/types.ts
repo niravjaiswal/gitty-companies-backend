@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { RemixPatch, Manifest } from "../skeletons/types.js";
 
 // ── Brief: extracted signals from a company job posting ────────
 
@@ -23,7 +22,7 @@ export type TokenUsage = {
   model: string;
 };
 
-// ── Agent usage (from Agent SDK) ───────────────────────────────
+// ── Agent usage (from the Agent SDK ResultMessage) ─────────────
 
 export type AgentUsage = {
   totalCostUsd: number;
@@ -33,23 +32,40 @@ export type AgentUsage = {
   durationMs: number;
 };
 
-// ── Validation report from post-remix tsc + vitest ─────────────
+// ── Validation report from the post-agent verification gate ────
 
 export type ValidationReport = {
   tscPass: boolean;
   vitestPass: boolean;
   overallPass: boolean;
-  repairRounds: number;
   errors: string[];
+};
+
+// ── Scenario / tasks / rubric (written by the agent into _remix_metadata.json) ──
+
+export type RemixScenario = {
+  title: string;
+  company_name: string;
+  narrative: string;
+};
+
+export type RemixTask = {
+  title: string;
+  description: string;
+};
+
+export type RemixRubricEntry = {
+  criterion: string;
+  weight: number;
 };
 
 // ── Remixed workspace: merged files + assessment metadata ──────
 
 export type RemixedWorkspace = {
   files: Record<string, string>;
-  scenario: RemixPatch["scenario"];
-  tasks: RemixPatch["tasks"];
-  rubric: RemixPatch["rubric"];
+  scenario: RemixScenario;
+  tasks: RemixTask[];
+  rubric: RemixRubricEntry[];
 };
 
 // ── Orchestrator input ─────────────────────────────────────────
@@ -57,20 +73,16 @@ export type RemixedWorkspace = {
 export type RemixOptions = {
   skeletonId: string;
   jobBrief: string;
-  maxRepairRounds?: number;
-  skipValidation?: boolean;
-  useAgent?: boolean;
 };
 
 // ── Orchestrator output ────────────────────────────────────────
 
 export type RemixResult = {
   brief: Brief;
-  patch: RemixPatch | null;
   workspace: RemixedWorkspace;
-  validation: ValidationReport | null;
+  validation: ValidationReport;
   usage: {
     extract: TokenUsage;
-    adapt: TokenUsage | AgentUsage;
+    adapt: AgentUsage;
   };
 };

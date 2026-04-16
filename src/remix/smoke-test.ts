@@ -5,8 +5,7 @@
  */
 import { remix } from "./remix.js";
 
-const useAgent = process.argv.includes("--agent");
-const skeletonId = process.argv.filter((a) => !a.startsWith("--"))[2] || "rest-api-express";
+const skeletonId = process.argv[2] || "rest-api-express";
 
 const SAMPLE_BRIEFS: Record<string, string> = {
   "rest-api-express": `
@@ -22,6 +21,26 @@ const SAMPLE_BRIEFS: Record<string, string> = {
     You'll implement interactive components for transaction monitoring, payment status tracking,
     and merchant analytics. Strong component architecture and testing skills required.
   `,
+  "react-orders-board": `
+    HarborCart is hiring a Frontend Engineer to improve a React fulfillment board used by warehouse coordinators.
+    The role emphasizes reducer-driven state management, filtering, order detail workflows, and interaction tests.
+    Candidates are expected to wire together composable UI pieces without breaking the existing Vite app shell.
+  `,
+  "data-pipeline-insights": `
+    SignalLoop is hiring a Data Engineer to maintain a TypeScript telemetry pipeline that processes both
+    batch exports and object-mode event streams. The work centers on aggregations, streaming windows,
+    report assembly, and deterministic tests for pipeline correctness.
+  `,
+  "ops-cli-audit": `
+    Northstar Platform is hiring an Infrastructure Engineer to maintain a TypeScript CLI used for release audits.
+    The team needs better suppression matching for noisy operational checks while preserving the current report format,
+    JSON output mode, and command-line ergonomics.
+  `,
+  "fullstack-support-hub": `
+    BrightDesk is hiring a Full-Stack Engineer to evolve an internal support-ops dashboard with a React frontend
+    and Node/Express API. The work spans shared domain logic, server routes, dashboard state, and risk scoring
+    for escalation decisions, with end-to-end tests covering both client and server flows.
+  `,
 };
 
 const brief = SAMPLE_BRIEFS[skeletonId];
@@ -32,26 +51,16 @@ if (!brief) {
 }
 
 async function main() {
-  console.error(`\n=== Smoke Test: ${skeletonId}${useAgent ? " (AGENT)" : ""} ===\n`);
+  console.error(`\n=== Smoke Test: ${skeletonId} ===\n`);
 
-  const result = await remix({
-    skeletonId,
-    jobBrief: brief,
-    maxRepairRounds: 1,
-    useAgent,
-  });
+  const result = await remix({ skeletonId, jobBrief: brief });
 
   console.log("\n=== Results ===");
   console.log(`Brief: ${result.brief.company_name} — ${result.brief.role_title}`);
-  if (result.patch) {
-    console.log(`Patch: ${result.patch.file_patches.length} files, ${result.patch.tasks.length} tasks`);
-    console.log(`Scenario: ${result.patch.scenario.title}`);
-  } else {
-    console.log(`Scenario: ${result.workspace.scenario.title} (agent path — no patch)`);
-  }
-  console.log(`Validation: ${result.validation ? (result.validation.overallPass ? "PASS" : "FAIL") : "SKIPPED"}`);
+  console.log(`Scenario: ${result.workspace.scenario.title}`);
+  console.log(`Validation: ${result.validation.overallPass ? "PASS" : "FAIL"}`);
 
-  if (result.validation && !result.validation.overallPass) {
+  if (!result.validation.overallPass) {
     console.log("\nErrors:");
     for (const e of result.validation.errors) {
       console.log(`  - ${e.slice(0, 200)}`);
@@ -61,11 +70,7 @@ async function main() {
   const adapt = result.usage.adapt;
   console.log(`\nToken usage:`);
   console.log(`  Extract: ${result.usage.extract.inputTokens} in / ${result.usage.extract.outputTokens} out (${result.usage.extract.model})`);
-  if ("model" in adapt) {
-    console.log(`  Adapt: ${adapt.inputTokens} in / ${adapt.outputTokens} out (${adapt.model})`);
-  } else {
-    console.log(`  Adapt (agent): ${adapt.inputTokens} in / ${adapt.outputTokens} out | $${adapt.totalCostUsd.toFixed(3)} | ${adapt.turns} turns | ${Math.round(adapt.durationMs / 1000)}s`);
-  }
+  console.log(`  Adapt:   ${adapt.inputTokens} in / ${adapt.outputTokens} out | $${adapt.totalCostUsd.toFixed(3)} | ${adapt.turns} turns | ${Math.round(adapt.durationMs / 1000)}s`);
 }
 
 main().catch((err) => {
