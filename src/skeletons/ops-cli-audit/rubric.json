@@ -1,0 +1,20 @@
+{
+  "criteria": [
+    {
+      "name": "Snapshot parsing",
+      "weight": 0.25
+    },
+    {
+      "name": "Finding generation",
+      "weight": 0.35
+    },
+    {
+      "name": "CLI orchestration",
+      "weight": 0.2
+    },
+    {
+      "name": "Suppression behavior",
+      "weight": 0.2
+    }
+  ]
+}

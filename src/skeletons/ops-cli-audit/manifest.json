@@ -1,0 +1,88 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Project overview, CLI usage, and candidate instructions"
+    },
+    {
+      "path": "package.json",
+      "role": "provided",
+      "adapt": false,
+      "purpose": "Dependencies, scripts, and CLI entry metadata"
+    },
+    {
+      "path": "package-lock.json",
+      "role": "provided",
+      "adapt": false,
+      "purpose": "Pinned dependency graph for reproducible installs"
+    },
+    {
+      "path": "tsconfig.json",
+      "role": "provided",
+      "adapt": false,
+      "purpose": "TypeScript compiler options"
+    },
+    {
+      "path": "vitest.config.ts",
+      "role": "provided",
+      "adapt": false,
+      "purpose": "Vitest configuration"
+    },
+    {
+      "path": "src/index.ts",
+      "role": "provided",
+      "adapt": false,
+      "purpose": "CLI process entrypoint"
+    },
+    {
+      "path": "src/cli.ts",
+      "role": "candidate",
+      "adapt": true,
+      "purpose": "Command-line orchestration, argument parsing, and report execution"
+    },
+    {
+      "path": "src/types.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Audit snapshot, finding, and report types"
+    },
+    {
+      "path": "src/data.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Built-in sample snapshot used by the CLI and tests"
+    },
+    {
+      "path": "src/audit.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Snapshot parsing and finding generation"
+    },
+    {
+      "path": "src/filter.ts",
+      "role": "partial",
+      "adapt": true,
+      "purpose": "Suppression helper with exact-match behavior that the candidate expands"
+    },
+    {
+      "path": "src/report.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Text and JSON report formatting"
+    },
+    {
+      "path": "src/__tests__/audit.test.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Tests for parsing, finding generation, and suppression"
+    },
+    {
+      "path": "src/__tests__/cli.test.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "End-to-end CLI tests for text, JSON, and ignore modes"
+    }
+  ]
+}

@@ -45,6 +45,25 @@ describe("loadSkeleton", () => {
     }
   });
 
+  it.each([
+    ["react-orders-board", "react-spa"],
+    ["data-pipeline-insights", "data-processing"],
+    ["ops-cli-audit", "cli-tool"],
+    ["fullstack-support-hub", "full-stack"],
+  ])("loads the %s skeleton", async (id, pattern) => {
+    const loaded = await loadSkeleton(id);
+
+    expect(loaded.skeleton.name).toBe(id);
+    expect(loaded.skeleton.language).toBe("typescript");
+    expect(loaded.skeleton.pattern).toBe(pattern);
+    expect(loaded.manifest.files.length).toBeGreaterThan(8);
+
+    for (const entry of loaded.manifest.files) {
+      expect(loaded.files[entry.path]).toBeDefined();
+      expect(loaded.files[entry.path].length).toBeGreaterThan(0);
+    }
+  });
+
   it("returns files keyed by manifest path", async () => {
     const loaded = await loadSkeleton("pulseboard-launch-sprint");
 

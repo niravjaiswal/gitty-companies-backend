@@ -1,0 +1,20 @@
+{
+  "name": "ops-cli-audit",
+  "language": "typescript",
+  "pattern": "cli-tool",
+  "difficulty_range": { "min": "junior", "max": "mid" },
+  "skill_axes": [
+    "error_handling",
+    "code_organization",
+    "validation",
+    "testing_strategy"
+  ],
+  "estimated_scope": { "min": "1-2 hours", "max": "2-4 hours" },
+  "domain_tags": ["devops", "backend"],
+  "description": "A TypeScript CLI that audits operational health snapshots and produces a text or JSON report for release readiness.",
+  "assessment_copy": {
+    "title": "Ops CLI Audit",
+    "summary": "A TypeScript command-line assessment focused on parsing structured ops snapshots, building audit findings, and formatting a release report.",
+    "instructions_md": "# Ops CLI Audit\n\n## Overview\n\nYou are working on a TypeScript CLI used by the platform team to review an operations snapshot before a release.\n\nThe project already parses audit data, builds findings, and prints a report. The remaining work is to make suppression rules more flexible so the CLI can silence known noisy checks without changing the audit engine.\n\n## Core task\n\nExtend `src/filter.ts` so ignore rules support glob-style matching.\n\nToday the CLI only suppresses exact `service:code` matches. The platform team needs patterns like:\n- `billing:*`\n- `*:ownership`\n- `search:latency-*`\n\nYou should preserve the current output shape, keep the CLI runnable, and leave the tests passing.\n\n## Candidate workflow\n\n1. Read the current audit model and the text report output.\n2. Run the tests to understand the baseline behavior.\n3. Update the suppression logic to handle wildcard patterns.\n4. Verify the CLI still works in both text and JSON modes.\n\n## Commands\n\n```bash\nnpm install\nnpm run dev -- --input ./path/to/snapshot.json\nnpm test\n```\n"
+  }
+}
