@@ -14,8 +14,7 @@ skeleton-name/
 ├── package.json           # Working dependencies (pinned versions)
 ├── tsconfig.json          # Working compiler config
 ├── vitest.config.ts       # Working test config
-├── README.md              # Template with {{scenario}}, {{tasks}}, {{rubric}} placeholders
-└── rubric.json            # Evaluation criteria with {{weight}} placeholders
+└── README.md              # Template with {{scenario}} and {{tasks}} placeholders
 ```
 
 ## Validation contract
@@ -29,7 +28,7 @@ npm install && tsc --noEmit && vitest run
 - `npm install` must complete without errors
 - `tsc --noEmit` must produce zero type errors
 - `vitest run` must pass all tests for "provided" files
-- Tests for "candidate" files may exist but are expected to fail (testing stubs)
+- All tests in the skeleton must pass (`vitest run` exit 0). Tests are regression guards on the reference state; candidate-grading is handled outside the skeleton.
 
 Commit only the skeleton **source tree + `package-lock.json`**. Do
 **not** commit `files/node_modules/` or `files/dist/` left behind by
@@ -41,7 +40,7 @@ explicit guard against this path.
 
 ## Placeholder rules
 
-- `{{variable}}` tokens are allowed ONLY in: `README.md`, `rubric.json`, `skeleton.json` description fields
+- `{{variable}}` tokens are allowed ONLY in: `README.md` and `skeleton.json` description fields
 - Source code (`.ts`, `.tsx`, `.js`, etc.) has NO placeholders
 - Source code uses generic hardcoded values (e.g., "Assessment Dashboard" not `{{title}}`)
 - The AI remix layer (Sonnet) adapts source files via full-file replacement, not placeholder substitution
@@ -60,7 +59,7 @@ Each file in `manifest.json` has:
 ### Role definitions
 
 - **provided**: Code given to the candidate as-is. Tests for provided files must pass.
-- **candidate**: Files the candidate must implement. May contain stubs. Tests for candidate files are expected to fail against stubs.
+- **candidate**: The primary file the candidate's task focuses on. Ships as complete reference code (the agent only re-themes; it does not introduce gaps). The role label communicates intent to skeleton authors and downstream consumers.
 - **partial**: Starter code with gaps. The candidate extends it. Some tests pass, some fail.
 
 ### Adapt flag
