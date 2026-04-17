@@ -3,6 +3,7 @@ import { authenticate } from '../../infra/auth/auth.js';
 import { getSupabaseAdmin } from '../../infra/db/supabase.js';
 import { normalizeEmail } from '../../shared/utils/email.js';
 import { getCompanyMembership } from '../../infra/auth/companyAuth.js';
+import { listSkeletons } from '../../../skeletons/index.js';
 import type { SessionManager } from '../sessions/sessionManager.js';
 import {
   normalizeAuthoringConfig,
@@ -207,6 +208,26 @@ export async function assessmentRoutes(
       });
     },
   );
+
+  fastify.get('/api/company/skeletons', async (request, reply) => {
+    const membership = await getCompanyMembership(request.user.id);
+    if (!membership) {
+      return reply.status(403).send({ error: 'Company access required' });
+    }
+
+    const summaries = await listSkeletons();
+    return summaries.map((s) => ({
+      id: s.id,
+      name: s.name,
+      language: s.language,
+      pattern: s.pattern,
+      description: s.description,
+      domainTags: s.domain_tags,
+      skillAxes: s.skill_axes,
+      difficultyRange: s.difficulty_range,
+      estimatedScope: s.estimated_scope,
+    }));
+  });
 
   fastify.get('/api/company/assessments', async (request, reply) => {
     const membership = await getCompanyMembership(request.user.id);

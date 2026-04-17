@@ -1,4 +1,5 @@
-export { loadSkeleton } from "./loader.js";
+export { loadSkeleton, listSkeletons } from "./loader.js";
+export type { SkeletonSummary } from "./loader.js";
 export {
   SkeletonSchema,
   ManifestSchema,

@@ -1,9 +1,9 @@
-import { readFile, access } from "node:fs/promises";
+import { readFile, access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { SkeletonSchema, ManifestSchema } from "./types.js";
-import type { LoadedSkeleton } from "./types.js";
+import type { LoadedSkeleton, Skeleton } from "./types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -73,4 +73,47 @@ export async function loadSkeleton(id: string): Promise<LoadedSkeleton> {
     manifest: manifestResult.data,
     files,
   };
+}
+
+export type SkeletonSummary = { id: string } & Skeleton;
+
+let cachedSummaries: SkeletonSummary[] | null = null;
+
+/**
+ * List all available skeletons with parsed metadata (excluding file contents).
+ * Cached in-process; skeletons don't change at runtime.
+ */
+export async function listSkeletons(): Promise<SkeletonSummary[]> {
+  if (cachedSummaries) return cachedSummaries;
+
+  const entries = await readdir(__dirname, { withFileTypes: true });
+  const summaries: SkeletonSummary[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith("__")) continue;
+
+    const skeletonPath = join(__dirname, entry.name, "skeleton.json");
+    try {
+      const raw = await readFile(skeletonPath, "utf-8");
+      const parsed = SkeletonSchema.safeParse(JSON.parse(raw));
+      if (parsed.success) {
+        summaries.push({ id: entry.name, ...parsed.data });
+      } else {
+        console.warn(
+          `[skeletons] skipping "${entry.name}": invalid skeleton.json — ${parsed.error.message}`,
+        );
+      }
+    } catch (err) {
+      // Directories without skeleton.json are expected; only warn on other failures.
+      if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+        console.warn(
+          `[skeletons] skipping "${entry.name}": ${(err as Error).message}`,
+        );
+      }
+    }
+  }
+
+  summaries.sort((a, b) => a.name.localeCompare(b.name));
+  cachedSummaries = summaries;
+  return summaries;
 }
