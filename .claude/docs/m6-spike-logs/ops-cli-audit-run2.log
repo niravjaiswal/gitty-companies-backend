@@ -1,0 +1,46 @@
+
+=== Smoke Test: ops-cli-audit ===
+
+[remix] Loading skeleton: ops-cli-audit
+[remix] Extracting brief...
+  extract-brief: Initial parse failed, retrying with error feedback...
+[remix] Brief extracted: Northstar Platform — Infrastructure Engineer
+[remix] Running agent adaptation...
+[agent-adapt] Starting agent in /var/folders/__/gmsmgf5x4m55trmlhh01v75r0000gp/T/stage4-EE8hmc
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Write
+[agent-adapt] Agent done: success | 26 turns | $0.369
+[agent-adapt] Running post-agent verification...
+[agent-adapt] Verification passed
+
+=== Results ===
+Brief: Northstar Platform — Infrastructure Engineer
+Scenario: Northstar Platform Infrastructure Release Audit CLI
+Validation: PASS
+
+Token usage:
+  Extract: 903 in / 127 out (claude-haiku-4-5-20251001)
+  Primary: 13 in / 11994 out | $0.369 | 26 turns | 170s | verified=true

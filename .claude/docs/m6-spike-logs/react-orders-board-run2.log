@@ -1,0 +1,94 @@
+
+=== Smoke Test: react-orders-board ===
+
+[remix] Loading skeleton: react-orders-board
+[remix] Extracting brief...
+  extract-brief: Initial parse failed, retrying with error feedback...
+[remix] Brief extracted: HarborCart — Frontend Engineer
+[remix] Running agent adaptation...
+[agent-adapt] Starting agent in /var/folders/__/gmsmgf5x4m55trmlhh01v75r0000gp/T/stage4-rSJpV5
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Write
+[agent-adapt] Agent done: success | 74 turns | $0.913
+[agent-adapt] Running post-agent verification...
+[agent-adapt] Verification passed
+
+=== Results ===
+Brief: HarborCart — Frontend Engineer
+Scenario: HarborCart Fulfillment Board – Frontend Engineer Assessment
+Validation: PASS
+
+Token usage:
+  Extract: 916 in / 99 out (claude-haiku-4-5-20251001)
+  Primary: 10 in / 23288 out | $0.913 | 74 turns | 256s | verified=true

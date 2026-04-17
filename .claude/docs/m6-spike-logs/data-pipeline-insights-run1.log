@@ -1,0 +1,41 @@
+
+=== Smoke Test: data-pipeline-insights ===
+
+[remix] Loading skeleton: data-pipeline-insights
+[remix] Extracting brief...
+  extract-brief: Initial parse failed, retrying with error feedback...
+[remix] Brief extracted: SignalLoop — Data Engineer
+[remix] Running agent adaptation...
+[agent-adapt] Starting agent in /var/folders/__/gmsmgf5x4m55trmlhh01v75r0000gp/T/stage4-s65hY9
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Write
+[agent-adapt] Agent done: success | 21 turns | $0.367
+[agent-adapt] Running post-agent verification...
+[agent-adapt] Verification passed
+
+=== Results ===
+Brief: SignalLoop — Data Engineer
+Scenario: SignalLoop Telemetry Console — Data Engineering Assessment
+Validation: PASS
+
+Token usage:
+  Extract: 901 in / 126 out (claude-haiku-4-5-20251001)
+  Primary: 11 in / 11452 out | $0.367 | 21 turns | 152s | verified=true

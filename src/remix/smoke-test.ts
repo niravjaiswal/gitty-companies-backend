@@ -3,6 +3,7 @@
  *
  * Usage: npx tsx src/remix/smoke-test.ts [skeleton-id]
  */
+import "dotenv/config";
 import { remix } from "./remix.js";
 
 const skeletonId = process.argv[2] || "rest-api-express";

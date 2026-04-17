@@ -1,0 +1,43 @@
+
+=== Smoke Test: fullstack-support-hub ===
+
+[remix] Loading skeleton: fullstack-support-hub
+[remix] Extracting brief...
+  extract-brief: Initial parse failed, retrying with error feedback...
+[remix] Brief extracted: BrightDesk — Full-Stack Engineer
+[remix] Running agent adaptation...
+[agent-adapt] Starting agent in /var/folders/__/gmsmgf5x4m55trmlhh01v75r0000gp/T/stage4-wThkyN
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Read
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Edit
+[agent-adapt]   tool: Write
+[agent-adapt]   tool: Write
+[agent-adapt]   tool: Write
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Bash
+[agent-adapt]   tool: Write
+[agent-adapt] Agent done: success | 23 turns | $0.540
+[agent-adapt] Running post-agent verification...
+[agent-adapt] Verification passed
+
+=== Results ===
+Brief: BrightDesk — Full-Stack Engineer
+Scenario: BrightDesk Support Ops — Escalation Engine
+Validation: PASS
+
+Token usage:
+  Extract: 934 in / 115 out (claude-haiku-4-5-20251001)
+  Primary: 13 in / 18977 out | $0.540 | 23 turns | 274s | verified=true
