@@ -67,10 +67,17 @@ async function main() {
     }
   }
 
-  const adapt = result.usage.adapt;
+  const { primary, repair } = result.usage.adapt;
   console.log(`\nToken usage:`);
   console.log(`  Extract: ${result.usage.extract.inputTokens} in / ${result.usage.extract.outputTokens} out (${result.usage.extract.model})`);
-  console.log(`  Adapt:   ${adapt.inputTokens} in / ${adapt.outputTokens} out | $${adapt.totalCostUsd.toFixed(3)} | ${adapt.turns} turns | ${Math.round(adapt.durationMs / 1000)}s`);
+  console.log(
+    `  Primary: ${primary.inputTokens} in / ${primary.outputTokens} out | $${primary.totalCostUsd.toFixed(3)} | ${primary.turns} turns | ${Math.round(primary.durationMs / 1000)}s | verified=${primary.verified}`,
+  );
+  if (repair) {
+    console.log(
+      `  Repair:  ${repair.inputTokens} in / ${repair.outputTokens} out | $${repair.totalCostUsd.toFixed(3)} | ${repair.turns} turns | ${Math.round(repair.durationMs / 1000)}s | verified=${repair.verified}`,
+    );
+  }
 }
 
 main().catch((err) => {

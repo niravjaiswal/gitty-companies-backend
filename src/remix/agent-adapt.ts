@@ -35,6 +35,24 @@ export interface AgentAdaptResult {
     durationMs: number;
   };
   verified: boolean;
+  tscOutput: string;
+  vitestOutput: string;
+}
+
+const MAX_OUTPUT_BYTES = 5_000;
+
+export function truncateOutput(value: string, maxBytes = MAX_OUTPUT_BYTES): string {
+  if (value.length <= maxBytes) return value;
+  const head = value.slice(0, maxBytes);
+  const remaining = value.length - maxBytes;
+  return `${head}\n… [truncated ${remaining} more chars]`;
+}
+
+export function combineOutput(stdout: string, stderr: string): string {
+  const parts: string[] = [];
+  if (stdout.trim()) parts.push(stdout);
+  if (stderr.trim()) parts.push(stderr);
+  return truncateOutput(parts.join("\n"));
 }
 
 // ── Agent configuration ─────────────────────────────────────────
@@ -149,15 +167,15 @@ export async function agentAdapt(
   const tscResult = await executor.tscCheck();
   const vitestResult = await executor.vitestRun();
   const verified = tscResult.exitCode === 0 && vitestResult.exitCode === 0;
+  const tscOutput = tscResult.exitCode === 0 ? "" : combineOutput(tscResult.stdout, tscResult.stderr);
+  const vitestOutput = vitestResult.exitCode === 0 ? "" : combineOutput(vitestResult.stdout, vitestResult.stderr);
 
   if (!verified) {
-    const tscErrors = tscResult.exitCode !== 0 ? (tscResult.stdout || tscResult.stderr).slice(0, 300) : "";
-    const vitestErrors = vitestResult.exitCode !== 0 ? (vitestResult.stderr || vitestResult.stdout).slice(0, 300) : "";
     console.error(
       `[agent-adapt] Verification FAILED — tsc=${tscResult.exitCode === 0} vitest=${vitestResult.exitCode === 0}`,
     );
-    if (tscErrors) console.error(`[agent-adapt]   tsc: ${tscErrors}`);
-    if (vitestErrors) console.error(`[agent-adapt]   vitest: ${vitestErrors}`);
+    if (tscOutput) console.error(`[agent-adapt]   tsc:\n${tscOutput.slice(0, 500)}`);
+    if (vitestOutput) console.error(`[agent-adapt]   vitest:\n${vitestOutput.slice(0, 500)}`);
   } else {
     console.error(`[agent-adapt] Verification passed`);
   }
@@ -177,6 +195,8 @@ export async function agentAdapt(
       durationMs: resultMessage.durationMs,
     },
     verified,
+    tscOutput,
+    vitestOutput,
   };
 }
 

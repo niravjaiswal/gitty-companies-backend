@@ -90,3 +90,67 @@ All other files in the workspace are static infrastructure (build config, test s
 
 Adapt the workspace now. Edit the files above, then run tsc and vitest to verify.`;
 }
+
+/**
+ * System prompt for the repair agent.
+ *
+ * The repair agent runs AFTER the primary agentAdapt pass has already themed the
+ * workspace but failed the tsc/vitest gate. Its job is narrow: fix the specific
+ * errors without re-theming, adding features, or changing file structure.
+ */
+export function buildRepairSystemPrompt(): string {
+  return `You are repairing a coding assessment workspace that was already themed by a previous agent.
+That agent adapted the workspace for a target company but left it in a state that fails \`tsc\` or \`vitest\`.
+
+Your ONLY job: fix the listed compile/test errors so the workspace verifies cleanly.
+
+## Rules
+
+1. **Do NOT re-theme.** The company/role adaptation is already done. Do not rename domain concepts or change user-facing strings.
+2. **Do NOT create, delete, or rename files.** Only edit existing files in place.
+3. **Do NOT change import paths, export names, type/interface names, or \`data-testid\` attributes.** These are structural.
+4. **Edit the smallest possible surface** to resolve each error. No refactoring, no unrelated cleanups.
+5. **Run \`npx tsc --noEmit --pretty false\` and \`npx vitest run\` after each edit round** — iterate until both pass.
+6. If \`_remix_metadata.json\` does not exist yet (the previous agent may not have written it), write it after the gates pass. Use the schema: \`{ "scenario": {...}, "tasks": [...], "rubric": [...] }\`. Copy company/role context from the existing code's user-facing strings.
+
+## Workflow
+
+1. Read the listed failing files and surrounding callers (use Read freely — you do not have the file contents inline).
+2. Make the minimum edits to fix errors.
+3. Run \`npx tsc --noEmit --pretty false\`. Fix what it reports.
+4. Run \`npx vitest run\`. Fix what it reports.
+5. If \`_remix_metadata.json\` is missing, write it.
+6. Stop.
+
+Do not exceed your turn budget on exploration — go straight from errors to edits.`;
+}
+
+/**
+ * User prompt for the repair agent, bundling the first-pass errors and the
+ * manifest (role hints) so it can locate and scope its edits.
+ */
+export function buildRepairUserPrompt(
+  brief: Brief,
+  manifest: Manifest,
+  tscOutput: string,
+  vitestOutput: string,
+): string {
+  const adaptableFiles = manifest.files
+    .filter((f) => f.adapt)
+    .map((f) => `- \`${f.path}\` — ${f.purpose}`)
+    .join("\n");
+
+  const sections: string[] = [];
+  sections.push(`## Target Company (already adapted)\n\n\`\`\`json\n${JSON.stringify(brief, null, 2)}\n\`\`\``);
+  sections.push(`## Adaptable Files\n\nThese were the files the previous agent was allowed to edit. You may also edit them if needed to fix errors.\n\n${adaptableFiles}`);
+
+  if (tscOutput.trim()) {
+    sections.push(`## tsc errors\n\n\`\`\`\n${tscOutput}\n\`\`\``);
+  }
+  if (vitestOutput.trim()) {
+    sections.push(`## vitest errors\n\n\`\`\`\n${vitestOutput}\n\`\`\``);
+  }
+
+  sections.push(`Repair the workspace now. Fix ONLY these errors — do not re-theme or refactor.`);
+  return sections.join("\n\n");
+}

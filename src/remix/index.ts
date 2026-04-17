@@ -5,6 +5,8 @@ export type {
   Brief,
   TokenUsage,
   AgentUsage,
+  AdaptPassMetrics,
+  AdaptMetrics,
   ValidationReport,
   RemixedWorkspace,
   RemixScenario,

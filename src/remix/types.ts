@@ -32,6 +32,15 @@ export type AgentUsage = {
   durationMs: number;
 };
 
+// ── Adapt metrics: records one or two agent passes ─────────────
+
+export type AdaptPassMetrics = AgentUsage & { verified: boolean };
+
+export type AdaptMetrics = {
+  primary: AdaptPassMetrics;
+  repair: AdaptPassMetrics | null;
+};
+
 // ── Validation report from the post-agent verification gate ────
 
 export type ValidationReport = {
@@ -83,6 +92,6 @@ export type RemixResult = {
   validation: ValidationReport;
   usage: {
     extract: TokenUsage;
-    adapt: AgentUsage;
+    adapt: AdaptMetrics;
   };
 };

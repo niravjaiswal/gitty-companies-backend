@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FastifyBaseLogger } from 'fastify';
 import { remix } from '../../../remix/index.js';
+import type { AdaptPassMetrics, RemixResult } from '../../../remix/index.js';
 import { chooseWorkspaceEntryFile } from '../assessments/assessmentWorkspace.js';
 
 const POLL_INTERVAL_MS = 5_000;
@@ -27,6 +28,55 @@ const CLI_KEYWORDS = [
   'cli', 'command line', 'terminal', 'shell', 'console', 'ops',
   'audit', 'log files', 'incident', 'developer tooling',
 ];
+
+export type GenerationMetricsPass = {
+  turns: number;
+  cost_usd: number;
+  duration_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  verified: boolean;
+};
+
+export type GenerationMetrics = {
+  skeleton_id: string;
+  primary: GenerationMetricsPass;
+  repair: GenerationMetricsPass | null;
+  final_verified: boolean;
+  tsc_output_head: string;
+  vitest_output_head: string;
+};
+
+const METRICS_OUTPUT_HEAD_BYTES = 500;
+
+function passMetrics(pass: AdaptPassMetrics): GenerationMetricsPass {
+  return {
+    turns: pass.turns,
+    cost_usd: pass.totalCostUsd,
+    duration_ms: pass.durationMs,
+    input_tokens: pass.inputTokens,
+    output_tokens: pass.outputTokens,
+    verified: pass.verified,
+  };
+}
+
+function extractOutputHead(errors: string[], prefix: string): string {
+  const match = errors.find((e) => e.startsWith(`${prefix}:`));
+  if (!match) return '';
+  return match.slice(prefix.length + 1).trim().slice(0, METRICS_OUTPUT_HEAD_BYTES);
+}
+
+export function buildGenerationMetrics(skeletonId: string, result: RemixResult): GenerationMetrics {
+  const { primary, repair } = result.usage.adapt;
+  return {
+    skeleton_id: skeletonId,
+    primary: passMetrics(primary),
+    repair: repair ? passMetrics(repair) : null,
+    final_verified: result.validation.overallPass,
+    tsc_output_head: extractOutputHead(result.validation.errors, 'tsc'),
+    vitest_output_head: extractOutputHead(result.validation.errors, 'vitest'),
+  };
+}
 
 export function chooseSkeleton(sourceBrief: string): string {
   const lower = sourceBrief.toLowerCase();
@@ -156,23 +206,49 @@ export class GenerationQueue {
         jobBrief,
       });
 
-      const files = result.workspace.files;
-      const entryFile = chooseWorkspaceEntryFile(Object.keys(files));
+      const metrics = buildGenerationMetrics(skeletonId, result);
+      const completedAt = new Date().toISOString();
 
-      await this.supabase
-        .from('assessments')
-        .update({
-          workspace_files: files,
-          workspace_entry_file: entryFile,
-          workspace_generated_at: new Date().toISOString(),
-          skeleton_id: skeletonId,
-          generation_status: 'completed',
-          generation_completed_at: new Date().toISOString(),
-          generation_error: null,
-        })
-        .eq('id', assessmentId);
+      if (result.validation.overallPass) {
+        const files = result.workspace.files;
+        const entryFile = chooseWorkspaceEntryFile(Object.keys(files));
 
-      this.logger.info(`[generation-queue] Completed assessment ${assessmentId} (skeleton: ${skeletonId})`);
+        await this.supabase
+          .from('assessments')
+          .update({
+            workspace_files: files,
+            workspace_entry_file: entryFile,
+            workspace_generated_at: completedAt,
+            skeleton_id: skeletonId,
+            generation_status: 'completed',
+            generation_completed_at: completedAt,
+            generation_error: null,
+            generation_metrics: metrics,
+          })
+          .eq('id', assessmentId);
+
+        this.logger.info(
+          `[generation-queue] Completed assessment ${assessmentId} (skeleton: ${skeletonId}, repair=${metrics.repair !== null})`,
+        );
+      } else {
+        const errorText = result.validation.errors.join('\n\n').slice(0, 2000)
+          || 'Generation finished but failed validation (no error output captured).';
+
+        await this.supabase
+          .from('assessments')
+          .update({
+            skeleton_id: skeletonId,
+            generation_status: 'failed',
+            generation_completed_at: completedAt,
+            generation_error: errorText,
+            generation_metrics: metrics,
+          })
+          .eq('id', assessmentId);
+
+        this.logger.warn(
+          `[generation-queue] Assessment ${assessmentId} failed validation after ${metrics.repair ? 'repair' : 'primary'} pass (skeleton: ${skeletonId})`,
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error({ err }, `[generation-queue] Failed assessment ${assessmentId}`);
