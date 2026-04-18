@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FastifyBaseLogger } from 'fastify';
 import { remix } from '../../../remix/index.js';
 import type { AdaptPassMetrics, RemixResult } from '../../../remix/index.js';
-import { chooseWorkspaceEntryFile } from '../assessments/assessmentWorkspace.js';
+import { chooseWorkspaceEntryFile, normalizeAuthoringConfig } from '../assessments/assessmentWorkspace.js';
 
 const POLL_INTERVAL_MS = 5_000;
 const STALE_THRESHOLD_MS = 10 * 60 * 1_000; // 10 minutes
@@ -188,22 +188,28 @@ export class GenerationQueue {
     try {
       const sourceBrief = (row.source_brief as string) ?? '';
       const skeletonId = (row.skeleton_id as string) || chooseSkeleton(sourceBrief);
+      const authoringConfig = normalizeAuthoringConfig(row.authoring_config);
 
-      // Build a job brief from available assessment fields
+      // Build a job brief from available assessment fields.
+      // Intentionally exclude instructions_md: once this queue writes a structured
+      // brief back into that column, re-including it on regeneration would feed
+      // the prior generated brief into the next jobBrief (feedback loop).
+      // source_brief holds the raw recruiter prompt, so nothing is lost.
       const title = (row.title as string) ?? '';
       const summary = (row.summary as string) ?? '';
-      const instructions = (row.instructions_md as string) ?? '';
-      const jobBrief = [title, summary, sourceBrief, instructions]
+      const jobBrief = [title, summary, sourceBrief]
         .filter(Boolean)
         .join('\n\n');
 
       if (!jobBrief.trim()) {
-        throw new Error('Assessment has no content to generate from (title, summary, source_brief, and instructions are all empty)');
+        throw new Error('Assessment has no content to generate from (title, summary, and source_brief are all empty)');
       }
 
       const result = await remix({
         skeletonId,
         jobBrief,
+        partCount: authoringConfig.partCount ?? 1,
+        examSpecifics: authoringConfig.examSpecifics,
       });
 
       const metrics = buildGenerationMetrics(skeletonId, result);
@@ -212,19 +218,23 @@ export class GenerationQueue {
       if (result.validation.overallPass) {
         const files = result.workspace.files;
         const entryFile = chooseWorkspaceEntryFile(Object.keys(files));
+        const updates: Record<string, unknown> = {
+          workspace_files: files,
+          workspace_entry_file: entryFile,
+          workspace_generated_at: completedAt,
+          skeleton_id: skeletonId,
+          generation_status: 'completed',
+          generation_completed_at: completedAt,
+          generation_error: null,
+          generation_metrics: metrics,
+        };
+        if (result.instructionsMd && result.instructionsMd.trim()) {
+          updates.instructions_md = result.instructionsMd;
+        }
 
         await this.supabase
           .from('assessments')
-          .update({
-            workspace_files: files,
-            workspace_entry_file: entryFile,
-            workspace_generated_at: completedAt,
-            skeleton_id: skeletonId,
-            generation_status: 'completed',
-            generation_completed_at: completedAt,
-            generation_error: null,
-            generation_metrics: metrics,
-          })
+          .update(updates)
           .eq('id', assessmentId);
 
         this.logger.info(

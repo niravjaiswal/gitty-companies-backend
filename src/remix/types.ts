@@ -82,6 +82,8 @@ export type RemixedWorkspace = {
 export type RemixOptions = {
   skeletonId: string;
   jobBrief: string;
+  partCount?: number;
+  examSpecifics?: string;
 };
 
 // ── Orchestrator output ────────────────────────────────────────
@@ -90,8 +92,10 @@ export type RemixResult = {
   brief: Brief;
   workspace: RemixedWorkspace;
   validation: ValidationReport;
+  instructionsMd: string;
   usage: {
     extract: TokenUsage;
     adapt: AdaptMetrics;
+    brief?: TokenUsage;
   };
 };
