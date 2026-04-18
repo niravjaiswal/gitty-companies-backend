@@ -28,6 +28,7 @@ function makeRemixResult(overrides: {
       overallPass: overrides.overallPass,
       errors: overrides.errors ?? [],
     },
+    instructionsMd: '',
     usage: {
       extract: { inputTokens: 0, outputTokens: 0, model: 'claude-sonnet-4-6' },
       adapt: {

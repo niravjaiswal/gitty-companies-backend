@@ -1,5 +1,6 @@
 export { remix } from "./remix.js";
 export { extractBrief } from "./extract-brief.js";
+export { generateInstructionsBrief } from "./generate-brief.js";
 
 export type {
   Brief,

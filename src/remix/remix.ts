@@ -3,7 +3,8 @@ import { RepoExecutor } from "../validation/index.js";
 import { extractBrief } from "./extract-brief.js";
 import { agentAdapt } from "./agent-adapt.js";
 import { agentRepair } from "./agent-repair.js";
-import type { AdaptMetrics, RemixOptions, RemixResult } from "./types.js";
+import { generateInstructionsBrief } from "./generate-brief.js";
+import type { AdaptMetrics, RemixOptions, RemixResult, TokenUsage } from "./types.js";
 
 /**
  * Remix a skeleton into a company-specific assessment.
@@ -61,6 +62,30 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
       if (errors.length === 0) errors.push("Post-agent verification failed (no error output captured)");
     }
 
+    let instructionsMd = "";
+    let briefUsage: TokenUsage | undefined;
+    if (verified) {
+      try {
+        console.error(`[remix] Generating candidate-facing instructions brief...`);
+        const briefResult = await generateInstructionsBrief({
+          brief,
+          assessmentCopy: loaded.skeleton.assessment_copy,
+          examSpecifics: options.examSpecifics,
+          scenario: workspace.scenario,
+          tasks: workspace.tasks,
+          rubric: workspace.rubric,
+          partCount: options.partCount ?? 1,
+        });
+        instructionsMd = briefResult.instructionsMd;
+        briefUsage = briefResult.usage;
+      } catch (err) {
+        console.error(
+          "[remix] generateInstructionsBrief threw — continuing with empty instructionsMd",
+          err,
+        );
+      }
+    }
+
     return {
       brief,
       workspace,
@@ -70,9 +95,11 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
         overallPass: verified,
         errors,
       },
+      instructionsMd,
       usage: {
         extract: extractUsage,
         adapt: adaptMetrics,
+        ...(briefUsage ? { brief: briefUsage } : {}),
       },
     };
   } finally {

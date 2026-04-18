@@ -10,7 +10,13 @@ export interface AssessmentStageConfig {
 export interface AssessmentAuthoringConfig {
   mode: 'single' | 'multi';
   stages: AssessmentStageConfig[];
+  partCount?: number;
+  examSpecifics?: string;
 }
+
+export const PART_COUNT_MIN = 1;
+export const PART_COUNT_MAX = 26;
+export const EXAM_SPECIFICS_MAX_LENGTH = 5000;
 
 export interface StoredAssessmentWorkspace {
   files: Record<string, string>;
@@ -109,7 +115,27 @@ export function normalizeAuthoringConfig(input: unknown): AssessmentAuthoringCon
     })
     .filter((stage): stage is AssessmentStageConfig => stage !== null);
 
-  return { mode, stages };
+  const partCount =
+    typeof value.partCount === 'number' &&
+    Number.isFinite(value.partCount) &&
+    Number.isInteger(value.partCount) &&
+    value.partCount >= PART_COUNT_MIN &&
+    value.partCount <= PART_COUNT_MAX
+      ? value.partCount
+      : undefined;
+
+  const rawExamSpecifics =
+    typeof value.examSpecifics === 'string' ? value.examSpecifics.trim() : '';
+  const examSpecifics = rawExamSpecifics
+    ? rawExamSpecifics.slice(0, EXAM_SPECIFICS_MAX_LENGTH)
+    : undefined;
+
+  return {
+    mode,
+    stages,
+    ...(partCount !== undefined ? { partCount } : {}),
+    ...(examSpecifics !== undefined ? { examSpecifics } : {}),
+  };
 }
 
 export function normalizeStoredWorkspace(

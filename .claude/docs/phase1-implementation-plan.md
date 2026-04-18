@@ -66,15 +66,14 @@ Build in order of risk, not order of delivery. The fidelity spike (M3) is the en
        |  M4: Async job queue     |  DONE
        |  (in-process polling,    |
        |   Supabase REST client)  |
-       |  M5: Skeleton library    |  PENDING
-       |  (#2-#5 in order)        |
-       |  M6: Repair loop         |  PENDING
+       |  M5: Skeleton library    |  DONE (6 skeletons)
+       |  M6: Repair loop         |  DONE (2-pass repair)
        +--------------+-----------+
                       v
        +--------------------------+
-       |  M7: Web app integration |  PENDING
-       |  (job API + Monaco UI +  |
-       |   publish flow)          |
+       |  M7: Web app integration |  DONE
+       |  (skeleton picker +      |
+       |   generation poll page)  |
        +--------------+-----------+
                       v
        +--------------------------+
@@ -86,12 +85,12 @@ Build in order of risk, not order of delivery. The fidelity spike (M3) is the en
 
 | # | Skeleton | Type | Status |
 |---|---|---|---|
-| 0 | Pulseboard (React+Vite) | Frontend | Done — 11 adaptable files |
-| 1 | REST API (Express) | Backend | Done — 3 adaptable files |
-| 2 | React frontend (state mgmt) | Frontend | Pending |
-| 3 | Data processing | Data eng | Pending |
-| 4 | CLI tool | Systems | Pending |
-| 5 | Full-stack (API + React) | Generalist | Pending |
+| 0 | `pulseboard-launch-sprint` (React+Vite) | Frontend | Done |
+| 1 | `rest-api-express` | Backend | Done |
+| 2 | `react-orders-board` | Frontend (data-heavy) | Done |
+| 3 | `data-pipeline-insights` | Data eng | Done |
+| 4 | `ops-cli-audit` | Systems (CLI) | Done |
+| 5 | `fullstack-support-hub` | Generalist | Done |
 
 ## Milestones (detail)
 
@@ -117,35 +116,27 @@ See git history on main. Key files:
 - Server lifecycle — queue starts after listen, stops on shutdown.
 - Skeleton auto-selection — keyword heuristic on source_brief (frontend keywords → pulseboard, default → rest-api).
 
-### M5 — Skeleton library expansion (PENDING)
+### M5 — Skeleton library expansion (DONE)
 
-Build skeletons #2-#5 in priority order.
+Six skeletons shipped, covering the full priority list plus extras:
+- `rest-api-express` — REST API baseline
+- `pulseboard-launch-sprint` — React frontend (state mgmt)
+- `react-orders-board` — React frontend (data-heavy)
+- `data-pipeline-insights` — data processing
+- `ops-cli-audit` — CLI tool
+- `fullstack-support-hub` — full-stack (API + React)
 
-Each skeleton: working project, tests, manifest with provided/candidate roles, validated against contract.
+### M6 — Validation + repair loop polish (DONE)
 
-Priority:
-1. React frontend (state mgmt) — ~1-2 days
-2. Data processing (stream/batch) — ~1-2 days
-3. CLI tool — ~1 day
-4. Full-stack (API + React) — ~2-3 days
+2-pass repair agent shipped with per-job metrics and fail-closed gate. M6 spike: 8/8 primary pass on baseline runs.
 
-### M6 — Validation + repair loop polish (PENDING)
+### M7 — Web app integration (DONE)
 
-The repair loop already works (used in M3 spike). Polish items:
-- Tune repair prompts for higher first-pass success
-- Add metrics/logging for repair rounds in production
-- Consider 2-pass repair for agent path failures
-
-### M7 — Web app integration (PENDING)
-
-Wire everything into the frontend.
-
-Deliverables:
-- Skeleton picker in assessment creation form
-- Role brief textarea + "Generate" button
-- Job progress UI (poll every 3s, show generationStatus)
-- On completion: open in existing Monaco editor for review/edit
-- "Publish" button to finalize and create candidate session
+Shipped:
+- `GET /api/company/skeletons` endpoint + skeleton picker in CreateAssessment (live mode only)
+- `/dashboard/assessments/:id/generation` progress page with 3s polling, long-run warning, regenerate CTA
+- AssessmentEditor redirects to generation page when status is pending/processing/failed with no files
+- 202 Accepted contract consumed end-to-end; demo flow preserved
 
 ### M8 — Customer validation (PENDING)
 
@@ -161,11 +152,11 @@ After M4, three independent lanes:
 | B | M6 (repair loop) | backend/src/remix/ | M2 engine |
 | C | M7 (web integration) | frontend + backend routes | M4 queue |
 
-M7 can start now that M4 is done. M5 and M6 are independent of each other and of M7.
+All three lanes complete. Only M8 remains.
 
 ## What already exists (reusable)
 
-- `src/skeletons/` — 2 proven skeletons with loader, validation, contract
+- `src/skeletons/` — 6 proven skeletons with loader, validation, contract
 - `src/remix/` — full agent adaptation pipeline, 100% fidelity
 - `src/validation/` — RepoExecutor, tsc/vitest parsing, repair functions
 - `src/app/modules/generation/generationQueue.ts` — async job processing
