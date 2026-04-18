@@ -240,6 +240,7 @@ export class SandboxService {
     const paths = await this.resolveCodeServerPaths(sandboxId);
     const assessmentRoot = await this.ensureAssessmentWorkspace(sandboxId);
     await this.ensureCodeServerInstalled(sandboxId, paths);
+    await this.writeCodeServerSettings(sandboxId, paths, assessmentRoot);
 
     // Step 2: Start code-server detached (pass all config via CLI args)
     this.logger.info(`Starting code-server in sandbox ${sandboxId}...`);
@@ -627,19 +628,13 @@ export class SandboxService {
     }
   }
 
-  private async bootstrapAssessmentWorkspace(sandboxId: string): Promise<void> {
+  private async writeCodeServerSettings(
+    sandboxId: string,
+    paths: CodeServerPaths,
+    assessmentRoot: string,
+  ): Promise<void> {
     const sandbox = this.getSandboxOrThrow(sandboxId);
-    const paths = await this.resolveCodeServerPaths(sandboxId);
-
-    const assessmentRoot = await this.ensureAssessmentWorkspace(sandboxId);
-    await this.ensureCodeServerInstalled(sandboxId, paths);
-    await sandbox.runCommand('mkdir', [
-      '-p',
-      paths.extensionsDir,
-      `${paths.userDataDir}/User`,
-      `${paths.homeDir}/.cache/code-server-vsix`,
-    ]);
-
+    await sandbox.runCommand('mkdir', ['-p', `${paths.userDataDir}/User`]);
     await this.writeFile(
       sandboxId,
       `${paths.userDataDir}/User/settings.json`,
@@ -653,6 +648,21 @@ export class SandboxService {
         2,
       ),
     );
+  }
+
+  private async bootstrapAssessmentWorkspace(sandboxId: string): Promise<void> {
+    const sandbox = this.getSandboxOrThrow(sandboxId);
+    const paths = await this.resolveCodeServerPaths(sandboxId);
+
+    const assessmentRoot = await this.ensureAssessmentWorkspace(sandboxId);
+    await this.ensureCodeServerInstalled(sandboxId, paths);
+    await sandbox.runCommand('mkdir', [
+      '-p',
+      paths.extensionsDir,
+      `${paths.homeDir}/.cache/code-server-vsix`,
+    ]);
+
+    await this.writeCodeServerSettings(sandboxId, paths, assessmentRoot);
 
     for (const extension of OFFICIAL_EDITOR_EXTENSIONS) {
       const vsixPath = `${paths.homeDir}/.cache/code-server-vsix/${extension.fileName}`;
