@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { buildGenerationMetrics, chooseSkeleton } from '../generationQueue.js';
+import { describe, expect, it, vi } from 'vitest';
+import { buildGenerationMetrics, chooseSkeleton, GenerationQueue } from '../generationQueue.js';
 import type { RemixResult } from '../../../../remix/index.js';
+import {
+  REPO_INGEST_ERROR_MESSAGES,
+  RepoIngestError,
+  type RepoIngestResult,
+} from '../../assessments/repoIngestion.js';
 
 function makeRemixResult(overrides: {
   overallPass: boolean;
@@ -85,6 +90,170 @@ describe('chooseSkeleton', () => {
         'Implement CRUD endpoints with Express, validation, and tests.',
       ),
     ).toBe('rest-api-express');
+  });
+});
+
+interface CapturedUpdate {
+  patch: Record<string, unknown>;
+  id: unknown;
+}
+
+function makeFakeSupabase() {
+  const updates: CapturedUpdate[] = [];
+  const client = {
+    from(_table: string) {
+      return {
+        update(patch: Record<string, unknown>) {
+          return {
+            eq(_col: string, val: unknown) {
+              updates.push({ patch, id: val });
+              return Promise.resolve({ data: null, error: null });
+            },
+          };
+        },
+      };
+    },
+  };
+  return { client, updates };
+}
+
+function makeSilentLogger() {
+  return {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+    child: vi.fn(() => makeSilentLogger()),
+    level: 'info',
+  } as unknown as import('fastify').FastifyBaseLogger;
+}
+
+describe('GenerationQueue repo-source dispatch', () => {
+  it('ingests a repo, persists the workspace, commit SHA, and metadata', async () => {
+    const { client, updates } = makeFakeSupabase();
+    const logger = makeSilentLogger();
+    const fakeIngest = vi.fn().mockResolvedValue({
+      files: { 'README.md': '# hi', 'src/index.ts': 'x' },
+      entryFilePath: 'README.md',
+      commitSha: 'deadbeef',
+      metadata: { filesKept: 2, filesDropped: 0, bytesStored: 6, droppedReasons: {} },
+    } satisfies RepoIngestResult);
+
+    const queue = new GenerationQueue(
+      client as unknown as import('@supabase/supabase-js').SupabaseClient,
+      logger,
+      { ingestRepo: fakeIngest },
+    );
+
+    await (queue as unknown as {
+      processJob: (row: Record<string, unknown>) => Promise<void>;
+    }).processJob({
+      id: 'a1',
+      source_type: 'repo',
+      source_repo_url: 'https://github.com/acme/widget',
+      source_repo_ref: 'main',
+    });
+
+    expect(fakeIngest).toHaveBeenCalledWith({
+      url: 'https://github.com/acme/widget',
+      ref: 'main',
+    });
+    expect(updates).toHaveLength(1);
+    const { patch, id } = updates[0];
+    expect(id).toBe('a1');
+    expect(patch.generation_status).toBe('completed');
+    expect(patch.generation_error).toBeNull();
+    expect(patch.source_repo_commit_sha).toBe('deadbeef');
+    expect(patch.workspace_entry_file).toBe('README.md');
+    expect(patch.workspace_files).toEqual({ 'README.md': '# hi', 'src/index.ts': 'x' });
+    expect(patch.source_repo_metadata).toMatchObject({ filesKept: 2 });
+    expect(patch.generation_metrics).toBeNull();
+  });
+
+  it('maps RepoIngestError to the user-facing message and marks failed', async () => {
+    const { client, updates } = makeFakeSupabase();
+    const logger = makeSilentLogger();
+    const fakeIngest = vi.fn().mockRejectedValue(new RepoIngestError('REPO_TOO_LARGE'));
+
+    const queue = new GenerationQueue(
+      client as unknown as import('@supabase/supabase-js').SupabaseClient,
+      logger,
+      { ingestRepo: fakeIngest },
+    );
+
+    await (queue as unknown as {
+      processJob: (row: Record<string, unknown>) => Promise<void>;
+    }).processJob({
+      id: 'a2',
+      source_type: 'repo',
+      source_repo_url: 'https://github.com/acme/huge',
+      source_repo_ref: 'main',
+    });
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0].patch.generation_status).toBe('failed');
+    expect(updates[0].patch.generation_error).toBe(
+      REPO_INGEST_ERROR_MESSAGES.REPO_TOO_LARGE,
+    );
+    expect(updates[0].patch.workspace_files).toBeUndefined();
+  });
+
+  it('marks the job failed when source_repo_url is missing', async () => {
+    const { client, updates } = makeFakeSupabase();
+    const logger = makeSilentLogger();
+    const fakeIngest = vi.fn();
+
+    const queue = new GenerationQueue(
+      client as unknown as import('@supabase/supabase-js').SupabaseClient,
+      logger,
+      { ingestRepo: fakeIngest },
+    );
+
+    await (queue as unknown as {
+      processJob: (row: Record<string, unknown>) => Promise<void>;
+    }).processJob({
+      id: 'a3',
+      source_type: 'repo',
+      source_repo_url: null,
+    });
+
+    expect(fakeIngest).not.toHaveBeenCalled();
+    expect(updates).toHaveLength(1);
+    expect(updates[0].patch.generation_status).toBe('failed');
+    expect(String(updates[0].patch.generation_error)).toMatch(/URL is missing/i);
+  });
+
+  it('passes ref undefined when source_repo_ref is blank', async () => {
+    const { client } = makeFakeSupabase();
+    const logger = makeSilentLogger();
+    const fakeIngest = vi.fn().mockResolvedValue({
+      files: { 'README.md': '#' },
+      entryFilePath: 'README.md',
+      commitSha: 'abc',
+      metadata: { filesKept: 1, filesDropped: 0, bytesStored: 1, droppedReasons: {} },
+    } satisfies RepoIngestResult);
+
+    const queue = new GenerationQueue(
+      client as unknown as import('@supabase/supabase-js').SupabaseClient,
+      logger,
+      { ingestRepo: fakeIngest },
+    );
+
+    await (queue as unknown as {
+      processJob: (row: Record<string, unknown>) => Promise<void>;
+    }).processJob({
+      id: 'a4',
+      source_type: 'repo',
+      source_repo_url: 'https://github.com/acme/widget',
+      source_repo_ref: '   ',
+    });
+
+    expect(fakeIngest).toHaveBeenCalledWith({
+      url: 'https://github.com/acme/widget',
+      ref: undefined,
+    });
   });
 });
 
