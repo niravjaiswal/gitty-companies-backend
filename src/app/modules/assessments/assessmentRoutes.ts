@@ -11,6 +11,11 @@ import {
   type AssessmentAuthoringConfig,
 } from './assessmentWorkspace.js';
 import { buildDemoAssessmentCopy, buildDemoWorkspace } from './demoWorkspace.js';
+import {
+  RepoIngestError,
+  parseAndValidateRepoUrl,
+  validateRepoRef,
+} from './repoIngestion.js';
 
 interface AssessmentRouteOptions extends FastifyPluginOptions {
   sessionManager: SessionManager;
@@ -33,6 +38,10 @@ function formatAssessmentPersistenceError(error: unknown, fallback: string): str
 
   if (/workspace_(files|entry_file|generated_at)/i.test(parts)) {
     return 'Assessment workspace migration is not applied. Run migration 007_assessment_workspace.sql.';
+  }
+
+  if (/source_(type|repo_url|repo_ref|repo_commit_sha|repo_metadata)/i.test(parts)) {
+    return 'Assessment source-repo migration is not applied. Run migration 010_assessment_source_repo.sql.';
   }
 
   return fallback;
@@ -68,6 +77,11 @@ function serializeAssessment(
     generationError: assessment.generation_error ?? null,
     generationStartedAt: assessment.generation_started_at ?? null,
     generationCompletedAt: assessment.generation_completed_at ?? null,
+    sourceType: (assessment.source_type as string | null) ?? null,
+    sourceRepoUrl: (assessment.source_repo_url as string | null) ?? null,
+    sourceRepoRef: (assessment.source_repo_ref as string | null) ?? null,
+    sourceRepoCommitSha: (assessment.source_repo_commit_sha as string | null) ?? null,
+    sourceRepoMetadata: assessment.source_repo_metadata ?? null,
     ...(options?.includeWorkspaceFiles
       ? {
           workspaceFiles: workspace.files,
@@ -282,6 +296,9 @@ export async function assessmentRoutes(
       durationMinutes: number;
       sourceBrief?: string;
       skeletonId?: string;
+      sourceType?: 'skeleton' | 'repo';
+      sourceRepoUrl?: string;
+      sourceRepoRef?: string;
       authoringConfig?: AssessmentAuthoringConfig;
       status?: 'draft' | 'published';
       generateWorkspace?: boolean;
@@ -302,6 +319,9 @@ export async function assessmentRoutes(
             durationMinutes: { type: 'integer', minimum: 1, maximum: 480 },
             sourceBrief: { type: 'string', maxLength: 10000 },
             skeletonId: { type: 'string', maxLength: 120 },
+            sourceType: { type: 'string', enum: ['skeleton', 'repo'] },
+            sourceRepoUrl: { type: 'string', maxLength: 400 },
+            sourceRepoRef: { type: 'string', maxLength: 200 },
             authoringConfig: {
               type: 'object',
               properties: {
@@ -341,6 +361,44 @@ export async function assessmentRoutes(
       const status = request.body.status ?? 'draft';
       const authoringConfig = normalizeAuthoringConfig(request.body.authoringConfig);
       const demoMode = request.body.demoMode === true;
+      const sourceType = request.body.sourceType ?? null;
+      const isRepoSource = sourceType === 'repo';
+
+      if (isRepoSource && demoMode) {
+        return reply.status(400).send({
+          error: 'BYOR (repository) source cannot be combined with demo mode.',
+        });
+      }
+
+      let normalizedRepoUrl: string | null = null;
+      let normalizedRepoRef: string | null = null;
+      if (isRepoSource) {
+        const rawUrl = request.body.sourceRepoUrl?.trim() ?? '';
+        if (!rawUrl) {
+          return reply.status(400).send({
+            error: 'sourceRepoUrl is required when sourceType is "repo".',
+          });
+        }
+        try {
+          const parsed = parseAndValidateRepoUrl(rawUrl);
+          normalizedRepoUrl = parsed.toString();
+        } catch (err) {
+          if (err instanceof RepoIngestError) {
+            return reply.status(400).send({ error: err.message });
+          }
+          throw err;
+        }
+        try {
+          const maybeRef = validateRepoRef(request.body.sourceRepoRef);
+          normalizedRepoRef = maybeRef ?? 'main';
+        } catch (err) {
+          if (err instanceof RepoIngestError) {
+            return reply.status(400).send({ error: err.message });
+          }
+          throw err;
+        }
+      }
+
       const demoCopy = demoMode
         ? buildDemoAssessmentCopy({
             title: request.body.title,
@@ -352,8 +410,13 @@ export async function assessmentRoutes(
       const summary = demoCopy?.summary ?? request.body.summary?.trim() ?? '';
       const instructionsMd = demoCopy?.instructionsMd ?? request.body.instructionsMd.trim();
       const sourceBrief = request.body.sourceBrief?.trim() ?? '';
-      const shouldGenerateWorkspace = request.body.generateWorkspace ?? status === 'published';
-      const skeletonId = request.body.skeletonId?.trim() || null;
+      // Repo source: always queue ingestion regardless of draft/published (the repo IS the workspace).
+      const shouldGenerateWorkspace = isRepoSource
+        ? true
+        : request.body.generateWorkspace ?? status === 'published';
+      const skeletonId = isRepoSource
+        ? null
+        : request.body.skeletonId?.trim() || null;
 
       // Demo mode: synchronous generation (fast, static files)
       let workspace: {
@@ -396,6 +459,9 @@ export async function assessmentRoutes(
           generation_status: shouldQueueGeneration ? 'pending' : null,
           status,
           published_at: status === 'published' ? new Date().toISOString() : null,
+          source_type: sourceType,
+          source_repo_url: normalizedRepoUrl,
+          source_repo_ref: normalizedRepoRef,
         })
         .select()
         .single();
@@ -483,6 +549,9 @@ export async function assessmentRoutes(
       durationMinutes?: number;
       sourceBrief?: string;
       skeletonId?: string;
+      sourceType?: 'skeleton' | 'repo';
+      sourceRepoUrl?: string;
+      sourceRepoRef?: string;
       authoringConfig?: AssessmentAuthoringConfig;
       status?: 'draft' | 'published' | 'archived';
       workspaceFiles?: Record<string, string>;
@@ -502,6 +571,9 @@ export async function assessmentRoutes(
             durationMinutes: { type: 'integer', minimum: 1, maximum: 480 },
             sourceBrief: { type: 'string', maxLength: 10000 },
             skeletonId: { type: 'string', maxLength: 120 },
+            sourceType: { type: 'string', enum: ['skeleton', 'repo'] },
+            sourceRepoUrl: { type: 'string', maxLength: 400 },
+            sourceRepoRef: { type: 'string', maxLength: 200 },
             authoringConfig: {
               type: 'object',
               properties: {
@@ -568,6 +640,63 @@ export async function assessmentRoutes(
       if (request.body.skeletonId !== undefined) {
         updates.skeleton_id = request.body.skeletonId.trim() || null;
       }
+
+      const effectiveSourceType = request.body.sourceType !== undefined
+        ? request.body.sourceType
+        : ((existing.source_type as string | null) ?? null);
+
+      if (request.body.sourceType !== undefined) {
+        updates.source_type = request.body.sourceType;
+        if (request.body.sourceType !== 'repo') {
+          updates.source_repo_url = null;
+          updates.source_repo_ref = null;
+          updates.source_repo_commit_sha = null;
+          updates.source_repo_metadata = null;
+        }
+      }
+
+      if (request.body.sourceRepoUrl !== undefined) {
+        const trimmed = request.body.sourceRepoUrl.trim();
+        if (trimmed === '') {
+          updates.source_repo_url = null;
+        } else {
+          try {
+            const parsed = parseAndValidateRepoUrl(trimmed);
+            updates.source_repo_url = parsed.toString();
+          } catch (err) {
+            if (err instanceof RepoIngestError) {
+              return reply.status(400).send({ error: err.message });
+            }
+            throw err;
+          }
+        }
+      }
+
+      if (request.body.sourceRepoRef !== undefined) {
+        try {
+          const maybeRef = validateRepoRef(request.body.sourceRepoRef);
+          updates.source_repo_ref = maybeRef ?? null;
+        } catch (err) {
+          if (err instanceof RepoIngestError) {
+            return reply.status(400).send({ error: err.message });
+          }
+          throw err;
+        }
+      }
+
+      // If source is effectively 'repo' after this PATCH, source_repo_url must resolve to a non-null value.
+      if (effectiveSourceType === 'repo') {
+        const resolvedRepoUrl =
+          'source_repo_url' in updates
+            ? (updates.source_repo_url as string | null)
+            : ((existing.source_repo_url as string | null) ?? null);
+        if (!resolvedRepoUrl) {
+          return reply.status(400).send({
+            error: 'sourceRepoUrl is required when sourceType is "repo".',
+          });
+        }
+      }
+
       if (request.body.authoringConfig !== undefined) {
         updates.authoring_config = normalizeAuthoringConfig(request.body.authoringConfig);
       }
@@ -595,13 +724,19 @@ export async function assessmentRoutes(
         updates.workspace_entry_file = normalizedWorkspace.entryFilePath;
       }
 
+      const repoFieldChanged =
+        request.body.sourceType !== undefined ||
+        request.body.sourceRepoUrl !== undefined ||
+        request.body.sourceRepoRef !== undefined;
+
       const shouldRegenerateWorkspace =
         request.body.regenerateWorkspace === true ||
         ((request.body.title !== undefined ||
           request.body.summary !== undefined ||
           request.body.instructionsMd !== undefined ||
           request.body.sourceBrief !== undefined ||
-          request.body.authoringConfig !== undefined) &&
+          request.body.authoringConfig !== undefined ||
+          repoFieldChanged) &&
           request.body.regenerateWorkspace !== false);
 
       if (shouldRegenerateWorkspace) {
@@ -614,6 +749,11 @@ export async function assessmentRoutes(
         updates.workspace_files = {};
         updates.workspace_entry_file = '';
         updates.workspace_generated_at = null;
+        // Clear commit sha so the new ingestion picks its own
+        if (effectiveSourceType === 'repo') {
+          updates.source_repo_commit_sha = null;
+          updates.source_repo_metadata = null;
+        }
       }
 
       const { data, error } = await supabase
