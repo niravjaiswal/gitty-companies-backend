@@ -3,6 +3,13 @@ import type { FastifyBaseLogger } from 'fastify';
 import { remix } from '../../../remix/index.js';
 import type { AdaptPassMetrics, RemixResult } from '../../../remix/index.js';
 import { chooseWorkspaceEntryFile, normalizeAuthoringConfig } from '../assessments/assessmentWorkspace.js';
+import {
+  REPO_INGEST_ERROR_MESSAGES,
+  RepoIngestError,
+  ingestRepo as defaultIngestRepo,
+  type IngestRepoInput,
+  type RepoIngestResult,
+} from '../assessments/repoIngestion.js';
 
 const POLL_INTERVAL_MS = 5_000;
 const STALE_THRESHOLD_MS = 10 * 60 * 1_000; // 10 minutes
@@ -95,16 +102,26 @@ export function chooseSkeleton(sourceBrief: string): string {
   return 'rest-api-express';
 }
 
+export interface GenerationQueueDependencies {
+  ingestRepo?: (input: IngestRepoInput) => Promise<RepoIngestResult>;
+}
+
 export class GenerationQueue {
   private supabase: SupabaseClient;
   private logger: FastifyBaseLogger;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
   private currentJob: Promise<void> | null = null;
+  private ingestRepoFn: (input: IngestRepoInput) => Promise<RepoIngestResult>;
 
-  constructor(supabase: SupabaseClient, logger: FastifyBaseLogger) {
+  constructor(
+    supabase: SupabaseClient,
+    logger: FastifyBaseLogger,
+    deps: GenerationQueueDependencies = {},
+  ) {
     this.supabase = supabase;
     this.logger = logger;
+    this.ingestRepoFn = deps.ingestRepo ?? defaultIngestRepo;
   }
 
   start(): void {
@@ -170,7 +187,9 @@ export class GenerationQueue {
       })
       .eq('id', pending.id)
       .eq('generation_status', 'pending')
-      .select('id, title, summary, instructions_md, source_brief, skeleton_id, authoring_config')
+      .select(
+        'id, title, summary, instructions_md, source_brief, skeleton_id, authoring_config, source_type, source_repo_url, source_repo_ref',
+      )
       .maybeSingle();
 
     if (claimError || !claimed) {
@@ -184,6 +203,12 @@ export class GenerationQueue {
 
   private async processJob(row: Record<string, unknown>): Promise<void> {
     const assessmentId = row.id as string;
+    const sourceType = (row.source_type as string) || 'skeleton';
+
+    if (sourceType === 'repo') {
+      await this.processRepoJob(assessmentId, row);
+      return;
+    }
 
     try {
       const sourceBrief = (row.source_brief as string) ?? '';
@@ -269,6 +294,78 @@ export class GenerationQueue {
           generation_status: 'failed',
           generation_error: message.slice(0, 2000),
           generation_completed_at: new Date().toISOString(),
+        })
+        .eq('id', assessmentId);
+    }
+  }
+
+  private async processRepoJob(
+    assessmentId: string,
+    row: Record<string, unknown>,
+  ): Promise<void> {
+    const url = ((row.source_repo_url as string) ?? '').trim();
+    const refRaw = (row.source_repo_ref as string | null | undefined) ?? undefined;
+    const ref = typeof refRaw === 'string' && refRaw.trim().length > 0 ? refRaw.trim() : undefined;
+
+    if (!url) {
+      const completedAt = new Date().toISOString();
+      await this.supabase
+        .from('assessments')
+        .update({
+          generation_status: 'failed',
+          generation_completed_at: completedAt,
+          generation_error: 'Repository URL is missing on this assessment.',
+        })
+        .eq('id', assessmentId);
+      this.logger.warn(
+        `[generation-queue] Repo job ${assessmentId} has no source_repo_url; marked failed`,
+      );
+      return;
+    }
+
+    try {
+      const result = await this.ingestRepoFn({ url, ref });
+      const completedAt = new Date().toISOString();
+
+      await this.supabase
+        .from('assessments')
+        .update({
+          workspace_files: result.files,
+          workspace_entry_file: result.entryFilePath,
+          workspace_generated_at: completedAt,
+          source_repo_commit_sha: result.commitSha,
+          source_repo_metadata: result.metadata,
+          generation_status: 'completed',
+          generation_completed_at: completedAt,
+          generation_error: null,
+          generation_metrics: null,
+        })
+        .eq('id', assessmentId);
+
+      this.logger.info(
+        `[generation-queue] Completed repo ingest for ${assessmentId} (commit ${result.commitSha}, files ${result.metadata.filesKept})`,
+      );
+    } catch (err) {
+      const completedAt = new Date().toISOString();
+      const message =
+        err instanceof RepoIngestError
+          ? REPO_INGEST_ERROR_MESSAGES[err.code]
+          : err instanceof Error
+          ? err.message
+          : String(err);
+
+      this.logger.warn(
+        { err },
+        `[generation-queue] Repo ingest failed for ${assessmentId}`,
+      );
+
+      await this.supabase
+        .from('assessments')
+        .update({
+          generation_status: 'failed',
+          generation_completed_at: completedAt,
+          generation_error: message.slice(0, 2000),
+          generation_metrics: null,
         })
         .eq('id', assessmentId);
     }
