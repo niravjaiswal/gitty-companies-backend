@@ -24,7 +24,7 @@ export interface StoredAssessmentWorkspace {
   generatedAt: string | null;
 }
 
-function normalizeWorkspaceRelativePath(filePath: string): string | null {
+export function normalizeWorkspaceRelativePath(filePath: string): string | null {
   const trimmed = filePath.trim().replace(/\\/g, '/');
   if (!trimmed) return null;
 
