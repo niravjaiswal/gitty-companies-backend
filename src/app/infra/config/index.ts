@@ -13,6 +13,7 @@ export interface Config {
   maxSandboxDurationMs: number;
   disconnectGracePeriodMs: number;
   port: number;
+  githubToken: string;
 }
 
 /**
@@ -38,5 +39,6 @@ export function loadConfig(): Config {
     maxSandboxDurationMs: parseInt(process.env.MAX_SANDBOX_DURATION_MS ?? '18000000', 10),
     disconnectGracePeriodMs: parseInt(process.env.DISCONNECT_GRACE_PERIOD_MS ?? '60000', 10),
     port: parseInt(process.env.PORT ?? '4000', 10),
+    githubToken: process.env.GITHUB_TOKEN ?? '',
   };
 }

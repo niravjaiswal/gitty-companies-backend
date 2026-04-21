@@ -839,6 +839,7 @@ export async function assessmentRoutes(
       // Batch-fetch sessions for all assignments
       let sessionByAssignment = new Map<string, any>();
       let submissionBySession = new Map<string, any>();
+      let gradeBySession = new Map<string, any>();
 
       if (assignmentIds.length > 0) {
         const { data: sessions } = await supabase
@@ -852,12 +853,21 @@ export async function assessmentRoutes(
 
         const sessionIds = (sessions ?? []).map((s) => s.id as string);
         if (sessionIds.length > 0) {
-          const { data: subs } = await supabase
-            .from('final_submissions')
-            .select('session_id, total_commands_run, total_file_changes, session_duration_seconds, total_disconnections, total_claude_prompts, total_claude_tool_calls, submitted_at')
-            .in('session_id', sessionIds);
+          const [{ data: subs }, { data: grades }] = await Promise.all([
+            supabase
+              .from('final_submissions')
+              .select('session_id, total_commands_run, total_file_changes, session_duration_seconds, total_disconnections, total_claude_prompts, total_claude_tool_calls, submitted_at')
+              .in('session_id', sessionIds),
+            supabase
+              .from('candidate_grades')
+              .select('session_id, composite_score, recommendation, code_quality_score, agent_usage_score, prompting_quality_score, industry_knowledge_score, graded_at')
+              .in('session_id', sessionIds),
+          ]);
           submissionBySession = new Map(
             (subs ?? []).map((s) => [s.session_id as string, s]),
+          );
+          gradeBySession = new Map(
+            (grades ?? []).map((g) => [g.session_id as string, g]),
           );
         }
       }
@@ -867,6 +877,8 @@ export async function assessmentRoutes(
         const submission = session
           ? submissionBySession.get(session.id as string)
           : null;
+
+        const grade = session ? gradeBySession.get(session.id as string) : null;
 
         return {
           id: assignment.id,
@@ -887,6 +899,17 @@ export async function assessmentRoutes(
                 totalClaudePrompts: submission.total_claude_prompts,
                 totalClaudeToolCalls: submission.total_claude_tool_calls,
                 submittedAt: submission.submitted_at,
+              }
+            : null,
+          grade: grade
+            ? {
+                compositeScore: grade.composite_score as number,
+                recommendation: grade.recommendation as string,
+                codeQualityScore: grade.code_quality_score as number,
+                agentUsageScore: grade.agent_usage_score as number,
+                promptingQualityScore: grade.prompting_quality_score as number,
+                industryKnowledgeScore: grade.industry_knowledge_score as number,
+                gradedAt: grade.graded_at as string,
               }
             : null,
         };

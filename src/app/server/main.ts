@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { loadConfig } from '../infra/config/index.js';
@@ -10,6 +11,8 @@ import { sandboxRoutes } from '../modules/sessions/sessionRoutes.js';
 import { activityRoutes } from '../modules/activity/activityRoutes.js';
 import { assessmentRoutes } from '../modules/assessments/assessmentRoutes.js';
 import { GenerationQueue } from '../modules/generation/generationQueue.js';
+import { gradingRoutes } from '../modules/grading/gradingRoutes.js';
+import { talentRoutes } from '../modules/talent/talentRoutes.js';
 
 const config = loadConfig();
 const fastify = Fastify({
@@ -41,6 +44,12 @@ fastify.register(activityRoutes, { sessionManager });
 
 // Register company/candidate assessment routes
 fastify.register(assessmentRoutes, { sessionManager });
+
+// Register AI grading routes
+fastify.register(gradingRoutes);
+
+// Register talent discovery routes
+fastify.register(talentRoutes);
 
 // Health check
 fastify.get('/', async () => {
