@@ -14,6 +14,9 @@ export interface Config {
   disconnectGracePeriodMs: number;
   port: number;
   githubToken: string;
+  resendApiKey: string;
+  frontendUrl: string;
+  emailFrom: string;
 }
 
 /**
@@ -40,5 +43,8 @@ export function loadConfig(): Config {
     disconnectGracePeriodMs: parseInt(process.env.DISCONNECT_GRACE_PERIOD_MS ?? '60000', 10),
     port: parseInt(process.env.PORT ?? '4000', 10),
     githubToken: process.env.GITHUB_TOKEN ?? '',
+    resendApiKey: process.env.RESEND_API_KEY ?? '',
+    frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:8080',
+    emailFrom: process.env.EMAIL_FROM ?? 'gitty <noreply@gitty.ai>',
   };
 }

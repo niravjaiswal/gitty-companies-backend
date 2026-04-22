@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { authenticate } from '../../infra/auth/auth.js';
 import { getSupabaseAdmin } from '../../infra/db/supabase.js';
 import { normalizeEmail } from '../../shared/utils/email.js';
+import { emailService } from '../../shared/utils/emailService.js';
 import { getCompanyMembership } from '../../infra/auth/companyAuth.js';
 import { listSkeletons } from '../../../skeletons/index.js';
 import type { SessionManager } from '../sessions/sessionManager.js';
@@ -944,12 +945,20 @@ export async function assessmentRoutes(
       }
 
       const supabase = getSupabaseAdmin();
-      const { data: assessment, error: assessmentError } = await supabase
-        .from('assessments')
-        .select('id, status')
-        .eq('id', request.params.assessmentId)
-        .eq('company_id', membership.companyId)
-        .single();
+
+      const [{ data: assessment, error: assessmentError }, { data: company }] = await Promise.all([
+        supabase
+          .from('assessments')
+          .select('id, status, title, duration_minutes')
+          .eq('id', request.params.assessmentId)
+          .eq('company_id', membership.companyId)
+          .single(),
+        supabase
+          .from('companies')
+          .select('name')
+          .eq('id', membership.companyId)
+          .single(),
+      ]);
 
       if (assessmentError || !assessment) {
         return reply.status(404).send({ error: 'Assessment not found' });
@@ -993,9 +1002,23 @@ export async function assessmentRoutes(
         }
       }
 
+      // Send invite emails to newly created assignments (non-blocking)
+      const newEmails = rows.map((r) => r.candidate_email);
+      const loginUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:8080'}/candidate`;
+      const { sentCount, failedCount } = await emailService.sendBulkAssessmentInvites(
+        newEmails,
+        (company?.name as string | null) ?? 'A company',
+        (assessment.title as string) ?? 'Technical Assessment',
+        (assessment.duration_minutes as number) ?? 60,
+        loginUrl,
+        fastify.log,
+      );
+
       return reply.status(201).send({
         created: rows.length,
         skipped: normalizedEmails.filter((email) => existingSet.has(email)),
+        emailsSent: sentCount,
+        emailsFailed: failedCount,
       });
     },
   );

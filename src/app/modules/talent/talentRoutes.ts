@@ -4,6 +4,7 @@ import { authenticate } from '../../infra/auth/auth.js';
 import { getCompanyMembership } from '../../infra/auth/companyAuth.js';
 import { getSupabaseAdmin } from '../../infra/db/supabase.js';
 import { normalizeEmail } from '../../shared/utils/email.js';
+import { emailService } from '../../shared/utils/emailService.js';
 
 interface GitHubUser {
   login: string;
@@ -158,13 +159,22 @@ export async function talentRoutes(
       const searchData = await searchRes.json() as { items: Array<{ login: string }> };
       const logins = (searchData.items ?? []).slice(0, 10).map((u) => u.login);
 
-      const profiles = await Promise.all(
-        logins.map((login) => fetchGitHubUser(login, githubToken || undefined)),
+      const PINNED_LOGIN = 'ethanjoby';
+      const pinnedAlreadyInResults = logins.some(
+        (l) => l.toLowerCase() === PINNED_LOGIN.toLowerCase(),
       );
+
+      const [profiles, pinnedProfile] = await Promise.all([
+        Promise.all(logins.map((login) => fetchGitHubUser(login, githubToken || undefined))),
+        pinnedAlreadyInResults ? Promise.resolve(null) : fetchGitHubUser(PINNED_LOGIN, githubToken || undefined),
+      ]);
+
+      const candidates = profiles.filter(Boolean) as GitHubUser[];
+      if (pinnedProfile) candidates.unshift(pinnedProfile);
 
       return {
         query: searchQuery,
-        candidates: profiles.filter(Boolean) as GitHubUser[],
+        candidates,
       };
     },
   );
@@ -210,12 +220,19 @@ export async function talentRoutes(
 
       const supabase = getSupabaseAdmin();
 
-      const { data: assessment, error: assessmentError } = await supabase
-        .from('assessments')
-        .select('id, status')
-        .eq('id', request.body.assessmentId)
-        .eq('company_id', membership.companyId)
-        .single();
+      const [{ data: assessment, error: assessmentError }, { data: company }] = await Promise.all([
+        supabase
+          .from('assessments')
+          .select('id, status, title, duration_minutes')
+          .eq('id', request.body.assessmentId)
+          .eq('company_id', membership.companyId)
+          .single(),
+        supabase
+          .from('companies')
+          .select('name')
+          .eq('id', membership.companyId)
+          .single(),
+      ]);
 
       if (assessmentError || !assessment) {
         return reply.status(404).send({ error: 'Assessment not found' });
@@ -265,9 +282,23 @@ export async function talentRoutes(
         }
       }
 
+      // Send invite emails (non-blocking — assignment creation already succeeded)
+      const newEmails = rows.map((r) => r.candidate_email);
+      const loginUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:8080'}/candidate`;
+      const { sentCount, failedCount } = await emailService.sendBulkAssessmentInvites(
+        newEmails,
+        (company?.name as string | null) ?? 'A company',
+        (assessment.title as string) ?? 'Technical Assessment',
+        (assessment.duration_minutes as number) ?? 60,
+        loginUrl,
+        fastify.log,
+      );
+
       return reply.status(201).send({
         created: rows.length,
         skipped: normalizedEmails.filter((email) => existingSet.has(email)),
+        emailsSent: sentCount,
+        emailsFailed: failedCount,
       });
     },
   );
