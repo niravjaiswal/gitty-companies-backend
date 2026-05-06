@@ -34,6 +34,7 @@ function makeRemixResult(overrides: {
       errors: overrides.errors ?? [],
     },
     instructionsMd: '',
+    consistency: { pass: true, pathIssues: [], scriptIssues: [] },
     usage: {
       extract: { inputTokens: 0, outputTokens: 0, model: 'claude-sonnet-4-6' },
       adapt: {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PathConsistencyReport } from "./path-consistency.js";
 
 // ── Brief: extracted signals from a company job posting ────────
 
@@ -93,6 +94,7 @@ export type RemixResult = {
   workspace: RemixedWorkspace;
   validation: ValidationReport;
   instructionsMd: string;
+  consistency: PathConsistencyReport;
   usage: {
     extract: TokenUsage;
     adapt: AdaptMetrics;

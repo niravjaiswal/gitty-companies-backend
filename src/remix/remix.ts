@@ -4,7 +4,9 @@ import { extractBrief } from "./extract-brief.js";
 import { agentAdapt } from "./agent-adapt.js";
 import { agentRepair } from "./agent-repair.js";
 import { generateInstructionsBrief } from "./generate-brief.js";
+import { checkPathConsistency } from "./path-consistency.js";
 import type { AdaptMetrics, RemixOptions, RemixResult, TokenUsage } from "./types.js";
+import type { PathConsistencyReport } from "./path-consistency.js";
 
 /**
  * Remix a skeleton into a company-specific assessment.
@@ -86,16 +88,47 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
       }
     }
 
+    let consistency: PathConsistencyReport = { pass: true, pathIssues: [], scriptIssues: [] };
+    if (verified) {
+      consistency = checkPathConsistency({ instructionsMd, workspace });
+      const pathErrors = consistency.pathIssues.filter((i) => i.severity === "error");
+      const scriptErrors = consistency.scriptIssues.filter((i) => i.severity === "error");
+      const pathWarnings = consistency.pathIssues.filter((i) => i.severity === "warning");
+
+      for (const issue of pathErrors) {
+        const hint = issue.suggestion ? ` (did you mean ${issue.suggestion}?)` : "";
+        errors.push(`path: ${issue.source} references missing ${issue.path}${hint}`);
+      }
+      for (const issue of scriptErrors) {
+        errors.push(`script: ${issue.source} references missing npm script "${issue.script}"`);
+      }
+
+      if (!consistency.pass) {
+        const sample = [...pathErrors, ...scriptErrors]
+          .slice(0, 3)
+          .map((i) => ("path" in i ? `${i.source}:${i.path}` : `${i.source}:script:${i.script}`))
+          .join(", ");
+        console.error(
+          `[remix] Path consistency FAILED — ${pathErrors.length} path error(s), ${scriptErrors.length} script error(s), ${pathWarnings.length} warning(s); first: ${sample}`,
+        );
+      } else if (pathWarnings.length > 0) {
+        console.error(`[remix] Path consistency passed with ${pathWarnings.length} warning(s)`);
+      }
+    }
+
+    const overallPass = verified && consistency.pass;
+
     return {
       brief,
       workspace,
       validation: {
         tscPass: verified,
         vitestPass: verified,
-        overallPass: verified,
+        overallPass,
         errors,
       },
       instructionsMd,
+      consistency,
       usage: {
         extract: extractUsage,
         adapt: adaptMetrics,
