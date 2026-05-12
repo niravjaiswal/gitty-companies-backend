@@ -153,6 +153,7 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
           tasks: workspace.tasks,
           rubric: workspace.rubric,
           partCount: options.partCount ?? 1,
+          workspaceFiles: Object.keys(workspace.files),
         });
         instructionsMd = briefResult.instructionsMd;
         briefUsage = briefResult.usage;
@@ -167,6 +168,36 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
     let consistency: PathConsistencyReport = { pass: true, pathIssues: [], scriptIssues: [] };
     if (verified) {
       consistency = checkPathConsistency({ instructionsMd, workspace });
+
+      // Auto-fix unambiguous path errors: when the consistency check produced
+      // a `suggestion`, the bad path collides on basename with exactly one real
+      // file in the workspace, so a literal string replace is safe. Handles the
+      // common LLM mistake of dropping the `src/` prefix (path appears the way
+      // it's spelled in imports, not the project-root-relative path).
+      const fixable = consistency.pathIssues.filter(
+        (i) => i.severity === "error" && i.suggestion,
+      );
+      if (fixable.length > 0) {
+        const fixedSources = new Set<string>();
+        for (const issue of fixable) {
+          if (!issue.suggestion) continue;
+          if (issue.source === "instructionsMd") {
+            instructionsMd = instructionsMd.split(issue.path).join(issue.suggestion);
+            fixedSources.add("instructionsMd");
+          } else if (issue.source === "readme") {
+            const readme = workspace.files["README.md"];
+            if (readme) {
+              workspace.files["README.md"] = readme.split(issue.path).join(issue.suggestion);
+              fixedSources.add("readme");
+            }
+          }
+        }
+        console.error(
+          `[remix] Path consistency auto-fix applied (${fixable.length} substitution${fixable.length === 1 ? "" : "s"} across ${[...fixedSources].join(", ") || "none"}); re-checking`,
+        );
+        consistency = checkPathConsistency({ instructionsMd, workspace });
+      }
+
       const pathErrors = consistency.pathIssues.filter((i) => i.severity === "error");
       const scriptErrors = consistency.scriptIssues.filter((i) => i.severity === "error");
       const pathWarnings = consistency.pathIssues.filter((i) => i.severity === "warning");

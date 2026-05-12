@@ -25,6 +25,14 @@ Each part has:
 - One framing sentence.
 - 3–6 concrete bullets that reference actual files, functions, or behaviors from the scenario/tasks you are given.
 
+## Path discipline
+
+The caller supplies a "Workspace files" list. Every file path you write in the brief MUST appear verbatim in that list. Specifically:
+
+- Use the exact path as listed (including any \`src/\` prefix). Do not strip prefixes or rewrite paths to match how the file appears in import statements.
+- Never invent placeholder paths like \`path/to/snapshot.json\`, \`example/foo.ts\`, \`<file>.ts\`, or generic stand-ins. If no real path applies, rephrase to omit the path.
+- Never reference a file that is not in the Workspace files list. Test files, config files, and source files all live in that list.
+
 Do not invent capabilities the workspace doesn't have. If the recruiter's "exam specifics" conflict with the skeleton, the recruiter wins.`;
 
 export interface GenerateBriefPromptInput {
@@ -35,6 +43,7 @@ export interface GenerateBriefPromptInput {
   tasks: RemixTask[];
   rubric: RemixRubricEntry[];
   partCount: number;
+  workspaceFiles: string[];
 }
 
 export function letterForIndex(index: number): string {
@@ -42,7 +51,7 @@ export function letterForIndex(index: number): string {
 }
 
 export function buildGenerateBriefPrompt(input: GenerateBriefPromptInput): string {
-  const { brief, assessmentCopy, examSpecifics, scenario, tasks, rubric, partCount } = input;
+  const { brief, assessmentCopy, examSpecifics, scenario, tasks, rubric, partCount, workspaceFiles } = input;
 
   const lastLetter = letterForIndex(Math.max(0, partCount - 1));
   const partsLine =
@@ -62,6 +71,10 @@ export function buildGenerateBriefPrompt(input: GenerateBriefPromptInput): strin
 
   const specifics = examSpecifics?.trim() || "(none provided)";
 
+  const fileList = workspaceFiles.length
+    ? [...workspaceFiles].sort().join("\n")
+    : "(no files captured)";
+
   return `Recruiter brief signals:
 ${JSON.stringify(brief, null, 2)}
 
@@ -80,6 +93,9 @@ ${taskLines}
 
 Rubric:
 ${rubricLines}
+
+Workspace files (the ONLY file paths you may reference in the brief — use them verbatim, including any \`src/\` prefix):
+${fileList}
 
 ${partsLine}
 

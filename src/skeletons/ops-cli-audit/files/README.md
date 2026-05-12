@@ -6,7 +6,7 @@ A TypeScript CLI for reviewing an operational snapshot before a release.
 
 ```bash
 npm install
-npm run dev -- --input ./path/to/snapshot.json
+npm run dev -- --input <path-to-snapshot.json>
 npm test
 ```
 
@@ -15,7 +15,7 @@ npm test
 The CLI reads a JSON snapshot, converts failing checks into findings, and prints either a text or JSON report. Two suppression sources can suppress noisy findings:
 
 - **In-code rules**: passed via `--ignore service:code,...`. Origin: the operator running the command.
-- **Policy file**: passed via `--policy ./path/to/policy.json`. Origin: a release-engineering-managed config file (see `config/suppressions.json` for a sample).
+- **Policy file**: passed via `--policy <path-to-policy.json>`. Origin: a release-engineering-managed config file (see `config/suppressions.json` for a sample).
 
 Both sources are flat lists of `service:code` strings today (no globs, no rule expressions). They overlap deliberately — a real release-engineering team will encode org-wide policy in the file, while individual operators may want temporary in-code overrides.
 
