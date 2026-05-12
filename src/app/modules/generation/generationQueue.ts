@@ -72,6 +72,7 @@ export type GenerationAdversarialMetrics = {
   avg_cost_usd: number;
   hardcoding_observed: boolean;
   test_files_modified: boolean;
+  test_modification_kind: "none" | "additions_only" | "modified_existing";
   judgment_calls_observed: boolean;
   architectural_decisions_observed: boolean;
   num_runs: number;
@@ -152,6 +153,7 @@ export function buildGenerationMetrics(skeletonId: string, result: RemixResult):
       avg_cost_usd: a.aggregate.avgCostUsd,
       hardcoding_observed: a.aggregate.hardcodingObserved,
       test_files_modified: a.aggregate.testFilesModified,
+      test_modification_kind: a.aggregate.testModificationKind,
       judgment_calls_observed: a.aggregate.judgmentCallsObserved,
       architectural_decisions_observed: a.aggregate.architecturalDecisionsObserved,
       num_runs: a.numRuns,

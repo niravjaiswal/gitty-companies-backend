@@ -11,6 +11,8 @@ export type HardcodingObservation = {
   evidence: string;
 };
 
+export type TestModificationKind = "none" | "additions_only" | "modified_existing";
+
 export type AdversarialRun = {
   runId: string;
   solved: boolean;
@@ -18,6 +20,7 @@ export type AdversarialRun = {
   numEdits: number;
   filesTouched: string[];
   testFilesTouched: string[];
+  testModificationKind: TestModificationKind;
   locDelta: number;
   costUsd: number;
   testOutput: string;
@@ -41,6 +44,7 @@ export type AdversarialAggregate = {
   avgCostUsd: number;
   hardcodingObserved: boolean;
   testFilesModified: boolean;
+  testModificationKind: TestModificationKind;
   judgmentCallsObserved: boolean;
   architecturalDecisionsObserved: boolean;
 };

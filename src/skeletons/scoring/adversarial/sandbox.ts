@@ -107,12 +107,15 @@ async function ensureInstalled(dir: string): Promise<void> {
   });
 }
 
+export type TestModificationKind = "none" | "additions_only" | "modified_existing";
+
 export type FileDiff = {
   filesTouched: string[];
   testFilesTouched: string[];
   candidateFilesTouched: string[];
   locDelta: number;
   diffsByPath: Record<string, { before: string; after: string }>;
+  testModificationKind: TestModificationKind;
 };
 
 export async function computeDiff(handle: SandboxHandle): Promise<FileDiff> {
@@ -138,7 +141,56 @@ export async function computeDiff(handle: SandboxHandle): Promise<FileDiff> {
     }
   }
 
-  return { filesTouched, testFilesTouched, candidateFilesTouched, locDelta, diffsByPath };
+  const testModificationKind = classifyTestModification(
+    testFilesTouched.map((p) => diffsByPath[p]),
+  );
+
+  return {
+    filesTouched,
+    testFilesTouched,
+    candidateFilesTouched,
+    locDelta,
+    diffsByPath,
+    testModificationKind,
+  };
+}
+
+/**
+ * Classify how the solver touched test files.
+ *   none              — no test files touched
+ *   additions_only    — every non-blank line in `before` still appears in `after`
+ *                       (so the solver only ADDED new lines/tests; existing
+ *                       assertions are untouched)
+ *   modified_existing — at least one non-blank line in `before` is gone in
+ *                       `after` (an existing assertion or `it`/`expect` body
+ *                       was changed)
+ *
+ * Comparison is line-set based, ignoring blank lines and leading/trailing
+ * whitespace, to tolerate trivial reflow.
+ */
+export function classifyTestModification(
+  diffs: Array<{ before: string; after: string } | undefined>,
+): TestModificationKind {
+  let touched = false;
+  for (const d of diffs) {
+    if (!d) continue;
+    touched = true;
+    const beforeLines = normalizedLineSet(d.before);
+    const afterLines = normalizedLineSet(d.after);
+    for (const line of beforeLines) {
+      if (!afterLines.has(line)) return "modified_existing";
+    }
+  }
+  return touched ? "additions_only" : "none";
+}
+
+function normalizedLineSet(s: string): Set<string> {
+  const out = new Set<string>();
+  for (const raw of s.split("\n")) {
+    const trimmed = raw.trim();
+    if (trimmed) out.add(trimmed);
+  }
+  return out;
 }
 
 function countLines(s: string): number {

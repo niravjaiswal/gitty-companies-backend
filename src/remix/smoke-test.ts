@@ -107,7 +107,7 @@ async function main() {
     const a = result.adversarial;
     console.log(`\nAdversarial gate:`);
     console.log(
-      `  Verdict: ${a.qualityVerdict} | solved=${(a.aggregate.solvedRate * 100).toFixed(0)}% | edits=${a.aggregate.medianEdits} | cost=$${a.aggregate.avgCostUsd.toFixed(2)} | testsCheated=${a.aggregate.testFilesModified ? "Y" : "N"} | judgment=${a.aggregate.judgmentCallsObserved ? "Y" : "N"}`,
+      `  Verdict: ${a.qualityVerdict} | solved=${(a.aggregate.solvedRate * 100).toFixed(0)}% | edits=${a.aggregate.medianEdits} | cost=$${a.aggregate.avgCostUsd.toFixed(2)} | testMod=${a.aggregate.testModificationKind} | judgment=${a.aggregate.judgmentCallsObserved ? "Y" : "N"}`,
     );
     console.log(`  Rationale: ${a.verdictRationale}`);
   }
