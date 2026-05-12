@@ -19,7 +19,6 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.107",
     "@anthropic-ai/sdk": "^0.78.0",
     "@fastify/cors": "^11.2.0",
-    "@fastify/websocket": "^11.2.0",
     "@supabase/supabase-js": "^2.99.1",
     "@vercel/sandbox": "^1.9.0",
     "dotenv": "^17.3.1",
@@ -31,7 +30,6 @@
   "devDependencies": {
     "@types/node": "^25.3.3",
     "@types/uuid": "^10.0.0",
-    "@types/ws": "^8.18.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
