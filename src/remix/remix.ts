@@ -3,19 +3,23 @@ import { RepoExecutor } from "../validation/index.js";
 import { extractBrief } from "./extract-brief.js";
 import { agentAdapt } from "./agent-adapt.js";
 import { agentRepair } from "./agent-repair.js";
+import { agentVary } from "./agent-vary.js";
 import { generateInstructionsBrief } from "./generate-brief.js";
 import { checkPathConsistency } from "./path-consistency.js";
-import type { AdaptMetrics, RemixOptions, RemixResult, TokenUsage } from "./types.js";
+import { planVariation } from "./variation-planner.js";
+import { runAdversarial } from "../skeletons/scoring/adversarial/runner.js";
+import { adversarialSourceFromWorkspace } from "../skeletons/scoring/adversarial/source.js";
+import type { AdversarialReport } from "../skeletons/scoring/adversarial/types.js";
+import type {
+  AdaptMetrics,
+  RemixOptions,
+  RemixResult,
+  TokenUsage,
+  VaryMetrics,
+} from "./types.js";
 import type { PathConsistencyReport } from "./path-consistency.js";
+import type { VariationPlan } from "./variation-planner.js";
 
-/**
- * Remix a skeleton into a company-specific assessment.
- *
- * Pipeline: loadSkeleton → extractBrief → agentAdapt → (agentRepair if needed)
- * The primary agent edits files in-place, runs tsc/vitest, self-heals, and
- * writes _remix_metadata.json. If it exits with verification still failing,
- * a narrower repair agent gets a fresh context window and the specific errors.
- */
 export async function remix(options: RemixOptions): Promise<RemixResult> {
   const { skeletonId, jobBrief } = options;
 
@@ -52,7 +56,6 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
       vitestOutput = repair.vitestOutput;
 
       if (repair.verified) {
-        // Repair may have touched files and/or written _remix_metadata.json — re-materialize workspace.
         workspace = await rehydrateWorkspace(executor, loaded.manifest, primary.workspace);
       }
     }
@@ -64,6 +67,79 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
       if (errors.length === 0) errors.push("Post-agent verification failed (no error output captured)");
     }
 
+    // ── Variation pass ────────────────────────────────────────
+    let variationPlan: VariationPlan | null = null;
+    let varyMetrics: VaryMetrics | undefined;
+    const axes = loaded.skeleton.variation_axes ?? [];
+
+    if (verified && !options.skipVary && axes.length > 0) {
+      console.error(`[remix] Planning variation across ${axes.length} declared axes...`);
+      const { plan, usage: plannerUsage } = await planVariation({
+        brief,
+        skeleton: loaded.skeleton,
+      });
+      variationPlan = plan;
+      const nonDefaultCount = plan.selections.filter((s) => !s.isDefault).length;
+      console.error(
+        `[remix] Plan: ${nonDefaultCount} non-default selection(s), ${plan.notApplicable.length} N/A`,
+      );
+
+      varyMetrics = {
+        planner: {
+          ...plannerUsage,
+          axesCount: axes.length,
+          nonDefaultCount,
+        },
+        executor: null,
+        metadata: null,
+      };
+
+      if (nonDefaultCount > 0) {
+        console.error(`[remix] Applying variations via executor agent...`);
+        const vary = await agentVary({
+          executor,
+          brief,
+          manifest: loaded.manifest,
+          plan,
+          axes,
+        });
+        varyMetrics.executor = {
+          ...vary.usage,
+          verified: vary.verified,
+          sacredViolations: vary.sacredViolations,
+        };
+        varyMetrics.metadata = vary.metadata;
+
+        if (!vary.verified) {
+          verified = false;
+          if (vary.tscOutput) errors.push(`vary tsc:\n${vary.tscOutput}`);
+          if (vary.vitestOutput) errors.push(`vary vitest:\n${vary.vitestOutput}`);
+          console.error(
+            `[remix] Variation pass FAILED — tsc=${!vary.tscOutput} vitest=${!vary.vitestOutput}`,
+          );
+        }
+
+        if (vary.sacredViolations.length > 0) {
+          verified = false;
+          for (const v of vary.sacredViolations) errors.push(`sacred: ${v}`);
+          console.error(
+            `[remix] Variation broke sacred anchors (${vary.sacredViolations.length})`,
+          );
+        }
+
+        if (verified) {
+          workspace = await rehydrateWorkspace(executor, loaded.manifest, workspace);
+        }
+      } else {
+        console.error(`[remix] Plan returned all defaults — no executor pass needed`);
+      }
+    } else if (axes.length === 0) {
+      console.error(`[remix] Skeleton declares no variation axes — skipping vary pass`);
+    } else if (options.skipVary) {
+      console.error(`[remix] skipVary set — bypassing variation pass`);
+    }
+
+    // ── Instructions + path consistency ───────────────────────
     let instructionsMd = "";
     let briefUsage: TokenUsage | undefined;
     if (verified) {
@@ -116,7 +192,40 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
       }
     }
 
-    const overallPass = verified && consistency.pass;
+    // ── Adversarial post-gen gate ─────────────────────────────
+    let adversarial: AdversarialReport | null = null;
+    if (verified && consistency.pass && !options.skipAdversarial) {
+      try {
+        console.error(`[remix] Running adversarial post-gen gate...`);
+        const source = adversarialSourceFromWorkspace({
+          name: `${brief.company_name}-${brief.role_title}`.replace(/\s+/g, "-").toLowerCase(),
+          manifest: loaded.manifest,
+          files: workspace.files,
+          filesDir: executor.dir,
+        });
+        adversarial = await runAdversarial(source, { runs: 1 });
+        console.error(
+          `[remix] Adversarial verdict: ${adversarial.qualityVerdict} (solved=${(adversarial.aggregate.solvedRate * 100).toFixed(0)}%, edits=${adversarial.aggregate.medianEdits}, cost=$${adversarial.aggregate.avgCostUsd.toFixed(2)})`,
+        );
+        if (
+          adversarial.qualityVerdict === "tests-cheated" ||
+          adversarial.qualityVerdict === "broken-tests"
+        ) {
+          errors.push(`adversarial: ${adversarial.qualityVerdict} — ${adversarial.verdictRationale}`);
+        }
+      } catch (err) {
+        console.error(`[remix] Adversarial gate threw (continuing): ${err}`);
+      }
+    } else if (options.skipAdversarial) {
+      console.error(`[remix] skipAdversarial set — bypassing post-gen gate`);
+    }
+
+    const overallPass =
+      verified &&
+      consistency.pass &&
+      (adversarial === null ||
+        (adversarial.qualityVerdict !== "tests-cheated" &&
+          adversarial.qualityVerdict !== "broken-tests"));
 
     return {
       brief,
@@ -129,9 +238,12 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
       },
       instructionsMd,
       consistency,
+      variationPlan,
+      adversarial,
       usage: {
         extract: extractUsage,
         adapt: adaptMetrics,
+        ...(varyMetrics ? { vary: varyMetrics } : {}),
         ...(briefUsage ? { brief: briefUsage } : {}),
       },
     };
@@ -140,10 +252,6 @@ export async function remix(options: RemixOptions): Promise<RemixResult> {
   }
 }
 
-/**
- * After repair succeeds, re-read files + metadata from disk so the returned
- * workspace reflects the repaired state.
- */
 async function rehydrateWorkspace(
   executor: RepoExecutor,
   manifest: Awaited<ReturnType<typeof loadSkeleton>>["manifest"],
@@ -169,7 +277,7 @@ async function rehydrateWorkspace(
     if (parsed.tasks) tasks = parsed.tasks;
     if (parsed.rubric) rubric = parsed.rubric;
   } catch {
-    // Metadata missing or unparseable — keep whatever the primary pass produced.
+    /* metadata missing or unparseable — keep fallback */
   }
 
   return { files, scenario, tasks, rubric };

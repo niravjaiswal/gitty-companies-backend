@@ -54,7 +54,10 @@ if (!brief) {
 async function main() {
   console.error(`\n=== Smoke Test: ${skeletonId} ===\n`);
 
-  const result = await remix({ skeletonId, jobBrief: brief });
+  const skipVary = process.argv.includes("--skip-vary");
+  const skipAdversarial = process.argv.includes("--skip-adversarial");
+
+  const result = await remix({ skeletonId, jobBrief: brief, skipVary, skipAdversarial });
 
   console.log("\n=== Results ===");
   console.log(`Brief: ${result.brief.company_name} — ${result.brief.role_title}`);
@@ -78,6 +81,35 @@ async function main() {
     console.log(
       `  Repair:  ${repair.inputTokens} in / ${repair.outputTokens} out | $${repair.totalCostUsd.toFixed(3)} | ${repair.turns} turns | ${Math.round(repair.durationMs / 1000)}s | verified=${repair.verified}`,
     );
+  }
+
+  if (result.usage.vary) {
+    const { planner, executor } = result.usage.vary;
+    console.log(`\nVariation:`);
+    console.log(
+      `  Planner: ${planner.inputTokens} in / ${planner.outputTokens} out | axes=${planner.axesCount} nonDefault=${planner.nonDefaultCount}`,
+    );
+    if (executor) {
+      console.log(
+        `  Executor: ${executor.inputTokens} in / ${executor.outputTokens} out | $${executor.totalCostUsd.toFixed(3)} | ${executor.turns} turns | ${Math.round(executor.durationMs / 1000)}s | verified=${executor.verified} | sacredViolations=${executor.sacredViolations.length}`,
+      );
+    }
+    if (result.variationPlan) {
+      console.log(`  Selections:`);
+      for (const sel of result.variationPlan.selections) {
+        const tag = sel.isDefault ? "default" : "FLEXED";
+        console.log(`    [${tag}] ${sel.axisId} = ${JSON.stringify(sel.value)} — ${sel.rationale.slice(0, 120)}`);
+      }
+    }
+  }
+
+  if (result.adversarial) {
+    const a = result.adversarial;
+    console.log(`\nAdversarial gate:`);
+    console.log(
+      `  Verdict: ${a.qualityVerdict} | solved=${(a.aggregate.solvedRate * 100).toFixed(0)}% | edits=${a.aggregate.medianEdits} | cost=$${a.aggregate.avgCostUsd.toFixed(2)} | testsCheated=${a.aggregate.testFilesModified ? "Y" : "N"} | judgment=${a.aggregate.judgmentCallsObserved ? "Y" : "N"}`,
+    );
+    console.log(`  Rationale: ${a.verdictRationale}`);
   }
 }
 

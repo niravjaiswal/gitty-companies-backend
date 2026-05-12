@@ -11,5 +11,23 @@
     "title": "Pulseboard Launch Sprint",
     "summary": "A polished React + TypeScript assessment built as a real Vite app with a missing task composer feature for the candidate to finish.",
     "instructions_md": "# Pulseboard Launch Sprint\n\n## Overview\n\nYou are stepping into Pulseboard, a launch-readiness dashboard used by product, design, and engineering to coordinate a release window.\n\nThe repo is already scaffolded as a normal React + TypeScript + Vite app. Your job is to finish a real product feature, not to bootstrap a project from scratch.\n\n## Core task\n\nBuild the missing \"Add launch task\" workflow into the dashboard.\n\nRight now the UI has a task composer, but submitting it does not add anything into the checklist.\n\nYou should:\n\n- make the composer create a real task in the launch list\n- validate required fields before submission\n- clear the form after a successful add\n- make sure the new task is immediately searchable and filterable\n- keep the current styling and layout intact\n\n## Candidate workflow\n\n- Explore the codebase and understand how state flows through the dashboard.\n- Run the app locally in the sandbox.\n- Run the tests to verify current behavior.\n- Implement the missing feature and leave the tests passing.\n- Submit the assessment from the top-right submit action when finished.\n\n## Sandbox commands\n\n```bash\nnpm install\nnpm run dev -- --host 0.0.0.0 --port 3000\nnpm run test\n```\n\n## Product context\n\n- The left rail summarizes launch momentum.\n- The hero section tracks release confidence and launch score.\n- The checklist is where teams drive the ship date forward.\n- The composer is intentionally incomplete and is the main assessment task.\n- The activity feed gives hiring teams something concrete to review on submission.\n\n## Submission\n\n- Keep the repo runnable.\n- Keep the tests green.\n- Use the in-product submit button when you are done."
-  }
+  },
+  "variation_axes": [
+    {
+      "id": "validation_timing",
+      "kind": "enum",
+      "skill_axis": "ui_component_design",
+      "values": ["on_submit", "on_blur", "on_change"],
+      "default": "on_submit",
+      "description": "When form validation errors surface. on_submit shows errors only after the user submits; on_blur shows them after a field loses focus; on_change shows them immediately as the user types."
+    },
+    {
+      "id": "duplicate_handling",
+      "kind": "enum",
+      "skill_axis": "state_management",
+      "values": ["reject", "allow_with_suffix", "allow_silently"],
+      "default": "reject",
+      "description": "What happens when the candidate adds a task with a title that already exists in the checklist. reject blocks the add and shows an error; allow_with_suffix appends '(2)' style; allow_silently inserts the duplicate as-is."
+    }
+  ]
 }

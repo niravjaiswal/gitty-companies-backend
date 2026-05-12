@@ -17,5 +17,23 @@
     "title": "Northstar Support Hub",
     "summary": "A full-stack support dashboard where candidates improve escalation handling, API ergonomics, and React state synchronization.",
     "instructions_md": "# Northstar Support Hub\n\n## Overview\n\nYou are working in Northstar's internal support console. The app already loads ticket data from an Express API and renders it in a React dashboard.\n\nThe current escalation policy is intentionally conservative. Your job is to tighten the policy so aging or silent tickets surface into the escalation queue more reliably, while keeping the dashboard and API responses in sync.\n\n## Core task\n\nRefine the escalation score in `src/shared/risk.ts` and make any follow-on adjustments needed in the server or React app so the queue, summary cards, and ticket details stay consistent.\n\nYou should:\n- improve how high-risk tickets are identified\n- keep the ticket list, summary strip, and detail panel synchronized after note updates\n- preserve the current filtering, searching, and note-taking behavior\n- keep the API and frontend tests passing\n\n## Candidate workflow\n\n1. Read the existing support data model and scoring helper\n2. Run the tests to see how the dashboard behaves today\n3. Update the escalation logic and any dependent UI or API code\n4. Make sure the project still typechecks and the tests stay green\n\n## Commands\n\n```bash\nnpm install\nnpm run server\nnpm run dev -- --host 0.0.0.0 --port 3000\nnpm test\n```"
-  }
+  },
+  "variation_axes": [
+    {
+      "id": "escalation_signal",
+      "kind": "enum",
+      "skill_axis": "api_design",
+      "values": ["age_only", "age_and_silence", "weighted_composite"],
+      "default": "age_and_silence",
+      "description": "What inputs determine the escalation score. age_only uses time-since-open; age_and_silence also factors in time-since-last-customer-reply; weighted_composite blends age, silence, severity, and customer tier into a tuned score."
+    },
+    {
+      "id": "note_update_sync",
+      "kind": "enum",
+      "skill_axis": "state_management",
+      "values": ["optimistic", "pessimistic", "optimistic_with_rollback"],
+      "default": "optimistic_with_rollback",
+      "description": "How the React dashboard reflects note updates relative to the API call. optimistic updates the UI immediately and ignores failures; pessimistic waits for the API response before updating; optimistic_with_rollback updates immediately but reverts on API failure with a toast."
+    }
+  ]
 }

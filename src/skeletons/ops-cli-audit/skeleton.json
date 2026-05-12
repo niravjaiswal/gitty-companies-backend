@@ -16,5 +16,23 @@
     "title": "Ops CLI Audit",
     "summary": "A TypeScript command-line assessment focused on parsing structured ops snapshots, building audit findings, and formatting a release report.",
     "instructions_md": "# Ops CLI Audit\n\n## Overview\n\nYou are working on a TypeScript CLI used by the platform team to review an operations snapshot before a release.\n\nThe project already parses audit data, builds findings, and prints a report. The remaining work is to make suppression rules more flexible so the CLI can silence known noisy checks without changing the audit engine.\n\n## Core task\n\nExtend `src/filter.ts` so ignore rules support glob-style matching.\n\nToday the CLI only suppresses exact `service:code` matches. The platform team needs patterns like:\n- `billing:*`\n- `*:ownership`\n- `search:latency-*`\n\nYou should preserve the current output shape, keep the CLI runnable, and leave the tests passing.\n\n## Candidate workflow\n\n1. Read the current audit model and the text report output.\n2. Run the tests to understand the baseline behavior.\n3. Update the suppression logic to handle wildcard patterns.\n4. Verify the CLI still works in both text and JSON modes.\n\n## Commands\n\n```bash\nnpm install\nnpm run dev -- --input ./path/to/snapshot.json\nnpm test\n```\n"
-  }
+  },
+  "variation_axes": [
+    {
+      "id": "pattern_syntax",
+      "kind": "enum",
+      "skill_axis": "validation",
+      "values": ["glob_only", "glob_and_regex_prefix", "advanced_with_negation"],
+      "default": "glob_only",
+      "description": "Suppression rule syntax. glob_only supports * wildcards; glob_and_regex_prefix also accepts ^regex$ when prefixed; advanced_with_negation adds !pattern for explicit include after a broader exclude."
+    },
+    {
+      "id": "severity_threshold_policy",
+      "kind": "enum",
+      "skill_axis": "error_handling",
+      "values": ["fail_on_any_critical", "fail_on_threshold_count", "warn_only"],
+      "default": "fail_on_any_critical",
+      "description": "Exit-code policy when findings are present. fail_on_any_critical exits non-zero on any critical; fail_on_threshold_count exits non-zero past N critical/high; warn_only always exits zero."
+    }
+  ]
 }
