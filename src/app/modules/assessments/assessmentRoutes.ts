@@ -78,6 +78,7 @@ function serializeAssessment(
     generationError: assessment.generation_error ?? null,
     generationStartedAt: assessment.generation_started_at ?? null,
     generationCompletedAt: assessment.generation_completed_at ?? null,
+    generationMetrics: assessment.generation_metrics ?? null,
     sourceType: (assessment.source_type as string | null) ?? null,
     sourceRepoUrl: (assessment.source_repo_url as string | null) ?? null,
     sourceRepoRef: (assessment.source_repo_ref as string | null) ?? null,

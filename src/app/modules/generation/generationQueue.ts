@@ -45,10 +45,44 @@ export type GenerationMetricsPass = {
   verified: boolean;
 };
 
+export type GenerationVariationSelection = {
+  axis_id: string;
+  value: string | number | boolean;
+  is_default: boolean;
+  rationale: string;
+};
+
+export type GenerationVariationMetrics = {
+  axes_count: number;
+  non_default_count: number;
+  planner_input_tokens: number;
+  planner_output_tokens: number;
+  executor: (GenerationMetricsPass & { sacred_violations: string[] }) | null;
+  overall_rationale: string;
+  selections: GenerationVariationSelection[];
+  not_applicable: string[];
+};
+
+export type GenerationAdversarialMetrics = {
+  verdict: string;
+  rationale: string;
+  solved_rate: number;
+  median_turns: number;
+  median_edits: number;
+  avg_cost_usd: number;
+  hardcoding_observed: boolean;
+  test_files_modified: boolean;
+  judgment_calls_observed: boolean;
+  architectural_decisions_observed: boolean;
+  num_runs: number;
+};
+
 export type GenerationMetrics = {
   skeleton_id: string;
   primary: GenerationMetricsPass;
   repair: GenerationMetricsPass | null;
+  variation: GenerationVariationMetrics | null;
+  adversarial: GenerationAdversarialMetrics | null;
   final_verified: boolean;
   tsc_output_head: string;
   vitest_output_head: string;
@@ -75,10 +109,61 @@ function extractOutputHead(errors: string[], prefix: string): string {
 
 export function buildGenerationMetrics(skeletonId: string, result: RemixResult): GenerationMetrics {
   const { primary, repair } = result.usage.adapt;
+
+  let variation: GenerationVariationMetrics | null = null;
+  if (result.usage.vary && result.variationPlan) {
+    const v = result.usage.vary;
+    variation = {
+      axes_count: v.planner.axesCount,
+      non_default_count: v.planner.nonDefaultCount,
+      planner_input_tokens: v.planner.inputTokens,
+      planner_output_tokens: v.planner.outputTokens,
+      executor: v.executor
+        ? {
+            turns: v.executor.turns,
+            cost_usd: v.executor.totalCostUsd,
+            duration_ms: v.executor.durationMs,
+            input_tokens: v.executor.inputTokens,
+            output_tokens: v.executor.outputTokens,
+            verified: v.executor.verified,
+            sacred_violations: v.executor.sacredViolations,
+          }
+        : null,
+      overall_rationale: result.variationPlan.overallRationale,
+      selections: result.variationPlan.selections.map((s) => ({
+        axis_id: s.axisId,
+        value: s.value,
+        is_default: s.isDefault,
+        rationale: s.rationale,
+      })),
+      not_applicable: result.variationPlan.notApplicable,
+    };
+  }
+
+  let adversarial: GenerationAdversarialMetrics | null = null;
+  if (result.adversarial) {
+    const a = result.adversarial;
+    adversarial = {
+      verdict: a.qualityVerdict,
+      rationale: a.verdictRationale,
+      solved_rate: a.aggregate.solvedRate,
+      median_turns: a.aggregate.medianTurns,
+      median_edits: a.aggregate.medianEdits,
+      avg_cost_usd: a.aggregate.avgCostUsd,
+      hardcoding_observed: a.aggregate.hardcodingObserved,
+      test_files_modified: a.aggregate.testFilesModified,
+      judgment_calls_observed: a.aggregate.judgmentCallsObserved,
+      architectural_decisions_observed: a.aggregate.architecturalDecisionsObserved,
+      num_runs: a.numRuns,
+    };
+  }
+
   return {
     skeleton_id: skeletonId,
     primary: passMetrics(primary),
     repair: repair ? passMetrics(repair) : null,
+    variation,
+    adversarial,
     final_verified: result.validation.overallPass,
     tsc_output_head: extractOutputHead(result.validation.errors, 'tsc'),
     vitest_output_head: extractOutputHead(result.validation.errors, 'vitest'),
