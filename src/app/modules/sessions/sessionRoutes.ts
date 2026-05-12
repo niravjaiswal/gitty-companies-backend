@@ -264,6 +264,33 @@ export async function sandboxRoutes(
     return session;
   }
 
+  async function recordCommandRun(
+    sessionId: string,
+    cmd: string,
+    args: string[] | undefined,
+  ): Promise<void> {
+    const commandText = [cmd, ...(args ?? [])].join(' ');
+    const { error } = await getSupabaseAdmin()
+      .from('session_activity')
+      .insert({
+        session_id: sessionId,
+        event_type: 'command_run',
+        detail: commandText,
+        metadata: {
+          source: 'session_exec',
+          cmd,
+          args: args ?? [],
+        },
+        occurred_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      fastify.log.warn(
+        `Failed to record command_run for session ${sessionId}: ${error.message}`,
+      );
+    }
+  }
+
   /**
    * POST /api/sessions/:sessionId/heartbeat — Keep session alive
    */
@@ -325,6 +352,7 @@ export async function sandboxRoutes(
 
       const { cmd, args } = request.body;
       await sessionManager.updateActivity(session.id);
+      await recordCommandRun(session.id, cmd, args);
 
       const result = await sandboxService.runCommand(session.sandboxId, cmd, args);
       return result;

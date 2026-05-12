@@ -1051,7 +1051,7 @@ describe('ActivityCollector', () => {
       });
     });
 
-    it('parses PostToolUse events as claude_tool_use', async () => {
+    it('does not count PostToolUse as a second claude_tool_use event', async () => {
       const claudeLog =
         '{"timestamp":"2026-03-15T14:23:03Z","hook_event":"PostToolUse","payload":{"tool_name":"Write"}}\n';
       (sandboxService.readFile as ReturnType<typeof vi.fn>)
@@ -1063,11 +1063,7 @@ describe('ActivityCollector', () => {
 
       await collector.collectActivity();
 
-      const insertCall = supabase._chain.insert.mock.calls[0][0];
-      expect(insertCall[0]).toMatchObject({
-        event_type: 'claude_tool_use',
-        detail: 'Write',
-      });
+      expect(supabase._chain.insert).not.toHaveBeenCalled();
     });
 
     it('parses Stop events as claude_response', async () => {
@@ -1208,10 +1204,10 @@ describe('ActivityCollector', () => {
       expect(insertCall[0].detail).toBe('second');
     });
 
-    it('does not deduplicate claude events', async () => {
+    it('does not deduplicate distinct claude events', async () => {
       const claudeLog = [
         '{"timestamp":"2026-03-15T14:23:01.000Z","hook_event":"PreToolUse","payload":{"tool_name":"Read"}}',
-        '{"timestamp":"2026-03-15T14:23:01.100Z","hook_event":"PostToolUse","payload":{"tool_name":"Read"}}',
+        '{"timestamp":"2026-03-15T14:23:01.100Z","hook_event":"PreToolUse","payload":{"tool_name":"Read"}}',
       ].join('\n') + '\n';
 
       (sandboxService.readFile as ReturnType<typeof vi.fn>)
@@ -1528,6 +1524,7 @@ describe('SubmissionService', () => {
     claudeTranscripts?: Array<{ claudeSessionId: string; content: string }>;
     insertError?: { message: string } | null;
     captureInsert?: (data: any) => void;
+    captureTranscriptInsert?: (data: any) => void;
   } = {}) {
     const sessionData = overrides.sessionData ?? {
       id: SESSION_ID,
@@ -1587,7 +1584,10 @@ describe('SubmissionService', () => {
       }
       if (table === 'claude_transcripts') {
         return {
-          insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+          insert: vi.fn().mockImplementation((data: any) => {
+            if (overrides.captureTranscriptInsert) overrides.captureTranscriptInsert(data);
+            return Promise.resolve({ data: null, error: null });
+          }),
         };
       }
       return supabase._chain;
@@ -1967,7 +1967,55 @@ describe('SubmissionService', () => {
         session_id: SESSION_ID,
         claude_session_id: 'claude-session-1',
         total_prompts: 1,
+        total_tool_calls: 1,
+      });
+    });
+
+    it('counts current Claude Code JSONL user messages and nested tool_use blocks', async () => {
+      const transcriptContent = [
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'please inspect the code' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'I will inspect it.' },
+              { type: 'tool_use', name: 'Read', input: { file_path: '/vercel/sandbox/app.ts' } },
+              { type: 'tool_use', name: 'Bash', input: { command: 'npm test', type: 'tool_use' } },
+            ],
+            usage: { input_tokens: 123, output_tokens: 45 },
+          },
+        }),
+        JSON.stringify({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', content: 'done' }],
+          },
+        }),
+      ].join('\n');
+
+      const claudeTranscriptInserts: any[] = [];
+      setupSubmissionMocks({
+        claudeTranscripts: [
+          { claudeSessionId: 'current-claude-session', content: transcriptContent },
+        ],
+        captureTranscriptInsert: (data) => { claudeTranscriptInserts.push(data); },
+      });
+
+      mockFindCommand([]);
+
+      await service.captureSubmission(SESSION_ID);
+
+      expect(claudeTranscriptInserts[0]).toMatchObject({
+        claude_session_id: 'current-claude-session',
+        total_prompts: 1,
         total_tool_calls: 2,
+        total_tokens_in: 123,
+        total_tokens_out: 45,
       });
     });
 
@@ -2016,7 +2064,7 @@ describe('SubmissionService', () => {
       expect(insertedData).not.toBeNull();
       // Transcript has 3 prompts > activity 2, so use 3
       expect((insertedData as any).total_claude_prompts).toBe(3);
-      // Activity has 5 tool calls > transcript 2, so use 5
+      // Activity has 5 tool calls > transcript 1, so use 5
       expect((insertedData as any).total_claude_tool_calls).toBe(5);
     });
 

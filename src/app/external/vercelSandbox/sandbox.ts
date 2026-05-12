@@ -341,6 +341,7 @@ export class SandboxService {
 
     // Create ~/.claude directory
     await sandbox.runCommand('mkdir', ['-p', `${homeDir}/.claude`]);
+    await sandbox.runCommand('rm', ['-rf', `${homeDir}/.claude/projects`]);
 
     // Read and write claude-hooks-settings.json
     const settingsPath = join(__dirname, '..', '..', 'infra', 'assets', 'claude-hooks-settings.json');
@@ -372,14 +373,15 @@ export class SandboxService {
     const sandbox = this.getSandboxOrThrow(sandboxId);
 
     try {
-      // Detect home directory
-      const homeResult = await sandbox.runCommand('bash', ['-c', 'echo $HOME']);
-      const homeDir = (await homeResult.stdout()).trim() || '/root';
+      const homeDir = await this.getHomeDir(sandboxId);
 
-      // Find all session transcript JSONL files
+      // Claude Code currently stores top-level session transcripts directly
+      // under ~/.claude/projects/<project>/<session>.jsonl, with subagent
+      // transcripts under child directories. Do not require a /sessions/
+      // path segment; older installs and newer installs differ here.
       const findResult = await sandbox.runCommand('bash', [
         '-c',
-        `find ${homeDir}/.claude/projects -name '*.jsonl' -path '*/sessions/*' 2>/dev/null || true`,
+        `find ${JSON.stringify(`${homeDir}/.claude/projects`)} -type f -name '*.jsonl' 2>/dev/null || true`,
       ]);
       const findStdout = await findResult.stdout();
 
