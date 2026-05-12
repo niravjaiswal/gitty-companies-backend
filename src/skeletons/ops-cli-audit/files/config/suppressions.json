@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "metadata": {
+    "owner": "release-eng",
+    "description": "Sample suppression policy. The CLI does not load this by default — pass --policy ./config/suppressions.json to opt in."
+  },
+  "suppressions": [
+    "billing:latency-budget",
+    "search:ownership"
+  ]
+}

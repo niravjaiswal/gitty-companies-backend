@@ -3,12 +3,15 @@ import { resolve } from "node:path";
 import { sampleSnapshot } from "./data.js";
 import { evaluateSnapshot, parseAuditSnapshot } from "./audit.js";
 import { formatJsonReport, formatTextReport } from "./report.js";
+import { loadPolicyFile, mergeSuppressions, type MergeStrategy } from "./lib/policy.js";
 import type { AuditSnapshot } from "./types.js";
 
 export interface CliOptions {
   inputPath: string | null;
   format: "text" | "json";
   suppressions: string[];
+  policyPath: string | null;
+  mergeStrategy: MergeStrategy;
 }
 
 export interface CliIO {
@@ -26,6 +29,8 @@ export function parseArgs(argv: string[]): CliOptions {
     inputPath: null,
     format: "text",
     suppressions: [],
+    policyPath: null,
+    mergeStrategy: "union",
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -58,6 +63,24 @@ export function parseArgs(argv: string[]): CliOptions {
         .split(",")
         .map((entry) => entry.trim())
         .filter(Boolean);
+      continue;
+    }
+
+    if (arg === "--policy") {
+      const value = argv[++index];
+      if (!value) {
+        throw new Error("Missing value for --policy");
+      }
+      options.policyPath = value;
+      continue;
+    }
+
+    if (arg === "--strategy") {
+      const value = argv[++index];
+      if (value !== "union" && value !== "config-wins" && value !== "in-code-wins") {
+        throw new Error("Strategy must be one of: union, config-wins, in-code-wins");
+      }
+      options.mergeStrategy = value;
       continue;
     }
 
@@ -94,10 +117,12 @@ function usage(): string {
     "Usage: ops-audit [options] [input-file]",
     "",
     "Options:",
-    "  -i, --input <path>   Path to a snapshot JSON file",
-    "  -f, --format <fmt>   text or json",
-    "      --ignore <list>  Comma-separated service:code suppressions",
-    "  -h, --help           Show help",
+    "  -i, --input <path>      Path to a snapshot JSON file",
+    "  -f, --format <fmt>      text or json",
+    "      --ignore <list>     Comma-separated service:code suppressions (in-code source)",
+    "      --policy <path>     Path to a JSON policy file (file source)",
+    "      --strategy <kind>   union | config-wins | in-code-wins (default: union)",
+    "  -h, --help              Show help",
     "",
   ].join("\n");
 }
@@ -114,9 +139,18 @@ export async function runCli(
 
     const options = parseArgs(argv);
     const snapshot = await loadSnapshot(options.inputPath);
-    const report = evaluateSnapshot(snapshot, {
-      suppressions: options.suppressions,
-    });
+
+    let suppressions = options.suppressions;
+    if (options.policyPath) {
+      const policy = await loadPolicyFile(options.policyPath);
+      suppressions = mergeSuppressions({
+        inCode: options.suppressions,
+        fromFile: policy.suppressions,
+        strategy: options.mergeStrategy,
+      });
+    }
+
+    const report = evaluateSnapshot(snapshot, { suppressions });
 
     const output =
       options.format === "json"

@@ -1,12 +1,22 @@
 {
   "files": [
-    { "path": "README.md", "role": "provided", "adapt": true, "purpose": "Project overview and candidate instructions" },
-    { "path": "package.json", "role": "provided", "adapt": false, "purpose": "NPM dependencies and scripts" },
+    { "path": "README.md", "role": "provided", "adapt": true, "purpose": "Project overview and the candidate task description (validation consolidation)" },
+    { "path": "package.json", "role": "provided", "adapt": false, "purpose": "NPM dependencies (express, zod) and scripts" },
     { "path": "tsconfig.json", "role": "provided", "adapt": false, "purpose": "TypeScript compiler options" },
     { "path": "vitest.config.ts", "role": "provided", "adapt": false, "purpose": "Vitest configuration" },
-    { "path": "src/app.ts", "role": "provided", "adapt": false, "purpose": "Express app setup with middleware" },
     { "path": "src/server.ts", "role": "provided", "adapt": false, "purpose": "Server entry point" },
-    { "path": "src/routes/tasks.ts", "role": "partial", "adapt": true, "purpose": "Task CRUD routes — PUT endpoint is stubbed for candidate" },
-    { "path": "src/__tests__/tasks.test.ts", "role": "provided", "adapt": true, "purpose": "Vitest + supertest test suite for all task endpoints" }
+    { "path": "src/app.ts", "role": "provided", "adapt": false, "purpose": "Express app wiring — mounts both routers" },
+    { "path": "src/types.ts", "role": "provided", "adapt": true, "purpose": "Domain types and status enums for Task and Project" },
+    { "path": "src/store/tasksStore.ts", "role": "provided", "adapt": true, "purpose": "In-memory Map-backed task store with seed/clear helpers" },
+    { "path": "src/store/projectsStore.ts", "role": "provided", "adapt": true, "purpose": "In-memory Map-backed project store with seed/clear helpers" },
+    { "path": "src/validation/schemas.ts", "role": "provided", "adapt": true, "purpose": "zod schemas — used by projects router. Candidate may delete if migrating to manual." },
+    { "path": "src/validation/manual.ts", "role": "provided", "adapt": true, "purpose": "Hand-rolled validators — used by tasks router. Candidate may delete if migrating to zod." },
+    { "path": "src/services/taskService.ts", "role": "provided", "adapt": true, "purpose": "Task business logic — list/get/create/update/delete with project cross-reference checks on create" },
+    { "path": "src/services/projectService.ts", "role": "provided", "adapt": true, "purpose": "Project business logic — list/get/create/update/delete with linked-task guard on delete" },
+    { "path": "src/routes/projects.ts", "role": "provided", "adapt": true, "purpose": "Project CRUD routes — uses zod via runZodValidation" },
+    { "path": "src/routes/tasks.ts", "role": "partial", "adapt": true, "purpose": "Task CRUD routes — uses manual validation; PUT lacks project-existence check; candidate must consolidate to one pattern" },
+    { "path": "src/__tests__/tasks.test.ts", "role": "provided", "adapt": true, "purpose": "Vitest + supertest suite for /tasks endpoints" },
+    { "path": "src/__tests__/projects.test.ts", "role": "provided", "adapt": true, "purpose": "Vitest + supertest suite for /projects endpoints" },
+    { "path": "src/__tests__/consistency.test.ts", "role": "provided", "adapt": false, "purpose": "Cross-resource invariants — the contract for what 'consolidated' means" }
   ]
 }

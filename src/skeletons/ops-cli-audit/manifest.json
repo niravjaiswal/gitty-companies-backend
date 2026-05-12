@@ -83,6 +83,24 @@
       "role": "provided",
       "adapt": true,
       "purpose": "End-to-end CLI tests for text, JSON, and ignore modes"
+    },
+    {
+      "path": "src/lib/policy.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Policy file parser + merge strategy implementations (union, config-wins, in-code-wins)"
+    },
+    {
+      "path": "src/lib/__tests__/policy.test.ts",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Direct unit tests for policy parsing, validation errors, and merge precedence rules"
+    },
+    {
+      "path": "config/suppressions.json",
+      "role": "provided",
+      "adapt": true,
+      "purpose": "Sample policy file demonstrating the JSON shape — not loaded by default"
     }
   ]
 }
