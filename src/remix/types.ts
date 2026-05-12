@@ -1,5 +1,8 @@
 import { z } from "zod";
 import type { PathConsistencyReport } from "./path-consistency.js";
+import type { VariationPlan } from "./variation-planner.js";
+import type { VaryMetadata } from "./agent-vary.js";
+import type { AdversarialReport } from "../skeletons/scoring/adversarial/types.js";
 
 // ── Brief: extracted signals from a company job posting ────────
 
@@ -85,6 +88,16 @@ export type RemixOptions = {
   jobBrief: string;
   partCount?: number;
   examSpecifics?: string;
+  skipVary?: boolean;
+  skipAdversarial?: boolean;
+};
+
+// ── Variation pass metrics (planner + executor) ─────────────────
+
+export type VaryMetrics = {
+  planner: TokenUsage & { axesCount: number; nonDefaultCount: number };
+  executor: AdaptPassMetrics & { sacredViolations: string[] } | null;
+  metadata: VaryMetadata | null;
 };
 
 // ── Orchestrator output ────────────────────────────────────────
@@ -95,9 +108,12 @@ export type RemixResult = {
   validation: ValidationReport;
   instructionsMd: string;
   consistency: PathConsistencyReport;
+  variationPlan: VariationPlan | null;
+  adversarial: AdversarialReport | null;
   usage: {
     extract: TokenUsage;
     adapt: AdaptMetrics;
+    vary?: VaryMetrics;
     brief?: TokenUsage;
   };
 };
