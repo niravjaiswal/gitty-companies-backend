@@ -66,6 +66,7 @@ export async function runAdversarial(
         numEdits: agentResult.numEdits,
         filesTouched: diff.filesTouched,
         testFilesTouched: diff.testFilesTouched,
+        testModificationKind: diff.testModificationKind,
         locDelta: diff.locDelta,
         costUsd: agentResult.costUsd,
         testOutput: testResult.output.slice(-4000),
@@ -116,6 +117,7 @@ function aggregateRuns(runs: AdversarialRun[]): AdversarialAggregate {
       avgCostUsd: 0,
       hardcodingObserved: false,
       testFilesModified: false,
+      testModificationKind: "none",
       judgmentCallsObserved: false,
       architecturalDecisionsObserved: false,
     };
@@ -131,6 +133,7 @@ function aggregateRuns(runs: AdversarialRun[]): AdversarialAggregate {
       ),
     hardcodingObserved: runs.some((r) => r.hardcoding.detected),
     testFilesModified: runs.some((r) => r.testFilesTouched.length > 0),
+    testModificationKind: worstTestModification(runs.map((r) => r.testModificationKind)),
     judgmentCallsObserved: runs.some((r) =>
       r.decisions.some((d) => d.category === "judgment_call"),
     ),
@@ -138,6 +141,14 @@ function aggregateRuns(runs: AdversarialRun[]): AdversarialAggregate {
       r.decisions.some((d) => d.category === "architectural"),
     ),
   };
+}
+
+function worstTestModification(
+  kinds: AdversarialRun["testModificationKind"][],
+): AdversarialRun["testModificationKind"] {
+  if (kinds.some((k) => k === "modified_existing")) return "modified_existing";
+  if (kinds.some((k) => k === "additions_only")) return "additions_only";
+  return "none";
 }
 
 function median(xs: number[]): number {
@@ -156,11 +167,11 @@ function computeQualityVerdict(
       rationale: "Agent failed all runs — skeleton may be unsolvable in turn budget or specs are unclear.",
     };
   }
-  if (agg.testFilesModified) {
+  if (agg.testModificationKind === "modified_existing") {
     return {
       verdict: "tests-cheated",
       rationale:
-        "Agent modified test files to pass. Either tests had bugs, conflicted with the README spec, or the agent abandoned the contract. Inspect transcripts before trusting the result.",
+        "Agent modified existing test assertions to pass. Either tests had bugs, conflicted with the README spec, or the agent abandoned the contract. Inspect transcripts before trusting the result.",
     };
   }
   if (agg.hardcodingObserved) {
@@ -170,6 +181,10 @@ function computeQualityVerdict(
         "Agent hardcoded fixture values and tests still passed. Tests do not bind real behavior — strengthen test assertions.",
     };
   }
+  // `additions_only` falls through: solver supplemented the suite with new
+  // cases against unchanged existing assertions. Surface via aggregate metadata
+  // but do not block — this is legitimate when the README prescribes behavior
+  // the seed tests don't fully cover.
   if (
     agg.solvedRate >= 0.8 &&
     agg.medianEdits < 3 &&
@@ -182,9 +197,14 @@ function computeQualityVerdict(
         "Agent solved with <3 edits and made no judgment calls. Task has one obvious answer — surface a fork.",
     };
   }
+  const suffix =
+    agg.testModificationKind === "additions_only"
+      ? " Note: solver added new test cases (existing assertions untouched)."
+      : "";
   return {
     verdict: "calibrated",
     rationale:
-      "Agent made real decisions and tests constrained behavior. Skeleton signals real engineering work.",
+      "Agent made real decisions and tests constrained behavior. Skeleton signals real engineering work." +
+      suffix,
   };
 }
