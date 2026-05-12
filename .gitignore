@@ -9,3 +9,8 @@ output
 # deps or build output from authoring runs.
 src/skeletons/*/files/node_modules/
 src/skeletons/*/files/dist/
+
+# Adversarial solver gate run artifacts — transcripts and reports are
+# per-run output, not source.
+src/skeletons/scoring/adversarial/transcripts/
+src/skeletons/scoring/reports/
