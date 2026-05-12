@@ -1,4 +1,3 @@
-import { useMemo, useState } from 'react';
 import './styles.css';
 import { Composer } from './components/Composer';
 import { ItemList } from './components/ItemList';
@@ -6,6 +5,8 @@ import { MetricGrid } from './components/MetricGrid';
 import { SidebarSummary } from './components/SidebarSummary';
 import { TimelineFeed } from './components/TimelineFeed';
 import { activityFeed, initialLaunchTasks, releaseStats } from './data';
+import { useLaunchTasks } from './hooks/useLaunchTasks';
+import { statusLabel } from './lib/launchTasks';
 
 export type LaunchStatus = 'ready' | 'watch' | 'blocked';
 
@@ -17,49 +18,19 @@ export interface LaunchTask {
   status: LaunchStatus;
 }
 
-function statusLabel(status: LaunchStatus): string {
-  switch (status) {
-    case 'ready':
-      return 'Ready';
-    case 'watch':
-      return 'Watch';
-    case 'blocked':
-      return 'Blocked';
-  }
-}
-
 export default function App() {
-  const [tasks, setTasks] = useState(initialLaunchTasks);
-  const [filter, setFilter] = useState<'all' | LaunchStatus>('all');
-  const [query, setQuery] = useState('');
-  const [composerError, setComposerError] = useState('');
-
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const matchesFilter = filter === 'all' ? true : task.status === filter;
-      const haystack = [task.title, task.owner, task.lane].join(' ').toLowerCase();
-      const matchesQuery = haystack.includes(query.toLowerCase());
-      return matchesFilter && matchesQuery;
-    });
-  }, [tasks, filter, query]);
-
-  const readyCount = tasks.filter((task) => task.status === 'ready').length;
-  const launchPercent = Math.round((readyCount / tasks.length) * 100);
-
-  function handleAddTask(input: { title: string; owner: string; lane: string; status: string }) {
-    if (!input.title || !input.owner || !input.lane) {
-      setComposerError('Title, owner, and lane are required.');
-      return false;
-    }
-
-    setComposerError('');
-
-    setTasks((prev) => [
-      ...prev,
-      { id: Math.max(0, ...prev.map((t) => t.id)) + 1, ...input, status: input.status as LaunchStatus },
-    ]);
-    return true;
-  }
+  const {
+    filter,
+    query,
+    filteredTasks,
+    composerError,
+    readyCount,
+    totalCount,
+    launchPercent,
+    setFilter,
+    setQuery,
+    addTask,
+  } = useLaunchTasks(initialLaunchTasks);
 
   return (
     <div className="shell">
@@ -67,7 +38,7 @@ export default function App() {
         title="Pulseboard Launch Sprint"
         launchPercent={launchPercent}
         readyCount={readyCount}
-        totalCount={tasks.length}
+        totalCount={totalCount}
       />
 
       <main className="workspace">
@@ -113,7 +84,7 @@ export default function App() {
               </div>
             </div>
 
-            <Composer onAddTask={handleAddTask} errorMessage={composerError} />
+            <Composer onAddTask={addTask} errorMessage={composerError} />
             <ItemList tasks={filteredTasks} getStatusLabel={statusLabel} />
           </section>
 

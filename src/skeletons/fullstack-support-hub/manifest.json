@@ -19,6 +19,7 @@
     { "path": "src/client/api.ts", "role": "provided", "adapt": true, "purpose": "Frontend API client for the dashboard" },
     { "path": "src/App.tsx", "role": "provided", "adapt": true, "purpose": "React support dashboard" },
     { "path": "src/App.test.tsx", "role": "provided", "adapt": true, "purpose": "React state management and note composer tests" },
-    { "path": "src/server/app.test.ts", "role": "provided", "adapt": true, "purpose": "Express API integration tests" }
+    { "path": "src/server/app.test.ts", "role": "provided", "adapt": true, "purpose": "Express API integration tests" },
+    { "path": "src/shared/__tests__/risk.test.ts", "role": "provided", "adapt": true, "purpose": "Direct unit tests pinning risk scoring boundaries, edge cases, and determinism" }
   ]
 }

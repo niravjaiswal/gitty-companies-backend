@@ -1,92 +1,82 @@
 import { Router } from 'express';
-
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: 'todo' | 'in_progress' | 'done';
-  createdAt: string;
-  updatedAt: string;
-}
-
-const tasks = new Map<string, Task>();
-let nextId = 1;
-
-function seedTasks() {
-  const now = new Date().toISOString();
-  const seed: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [
-    { title: 'Set up CI pipeline', description: 'Configure GitHub Actions for the project', status: 'done' },
-    { title: 'Write API documentation', description: 'Document all REST endpoints', status: 'in_progress' },
-    { title: 'Add rate limiting', description: 'Implement rate limiting middleware', status: 'todo' },
-  ];
-  for (const t of seed) {
-    const id = String(nextId++);
-    tasks.set(id, { ...t, id, createdAt: now, updatedAt: now });
-  }
-}
-
-seedTasks();
+import * as taskService from '../services/taskService.js';
+import { validateCreateTask, validateUpdateTask } from '../validation/manual.js';
+import { TASK_STATUSES, type TaskStatus } from '../types.js';
 
 export const tasksRouter = Router();
 
-tasksRouter.get('/', (_req, res) => {
-  res.json(Array.from(tasks.values()));
+tasksRouter.get('/', (req, res) => {
+  const statusParam = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+  const projectIdParam = typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
+
+  let status: TaskStatus | undefined;
+  if (statusParam !== undefined) {
+    if (!TASK_STATUSES.includes(statusParam as TaskStatus)) {
+      res.status(400).json({ error: `status must be one of: ${TASK_STATUSES.join(', ')}` });
+      return;
+    }
+    status = statusParam as TaskStatus;
+  }
+
+  res.json(taskService.listTasks({ status, search, projectId: projectIdParam }));
 });
 
 tasksRouter.get('/:id', (req, res) => {
-  const task = tasks.get(req.params.id);
-  if (!task) {
-    res.status(404).json({ error: 'Task not found' });
+  const result = taskService.getTask(req.params.id);
+  if (!result.ok) {
+    res.status(404).json({ error: 'task not found' });
     return;
   }
-  res.json(task);
+  res.json(result.value);
 });
 
 tasksRouter.post('/', (req, res) => {
-  const { title, description, status } = req.body;
-  if (!title || typeof title !== 'string') {
-    res.status(400).json({ error: 'Title is required' });
+  const validated = validateCreateTask(req.body);
+  if (!validated.ok) {
+    res.status(400).json({ error: 'validation failed', details: validated.errors });
     return;
   }
-  const id = String(nextId++);
-  const now = new Date().toISOString();
-  const task: Task = {
-    id,
-    title,
-    description: description ?? '',
-    status: status ?? 'todo',
-    createdAt: now,
-    updatedAt: now,
-  };
-  tasks.set(id, task);
-  res.status(201).json(task);
+  const result = taskService.createTask(validated.value);
+  if (!result.ok) {
+    if (result.error.kind === 'not_found') {
+      res.status(400).json({ error: `referenced ${result.error.resource} not found` });
+      return;
+    }
+    res.status(409).json({ error: result.error.message });
+    return;
+  }
+  res.status(201).json(result.value);
 });
 
-// TODO: This endpoint accepts any update without validation.
-// The candidate should add:
-// - Status validation (must be 'todo', 'in_progress', or 'done')
-// - Check that at least one valid field is provided
-// - Return 400 for invalid input
+// TODO: candidate work — see README.
+// The PUT endpoint currently delegates to the manual validator and lacks the
+// project-cross-reference checks that the projects router enforces via zod.
+// You need to consolidate validation into ONE pattern across both routers,
+// then make this endpoint behave consistently with PUT /projects/:id.
 tasksRouter.put('/:id', (req, res) => {
-  const task = tasks.get(req.params.id);
-  if (!task) {
-    res.status(404).json({ error: 'Task not found' });
+  const validated = validateUpdateTask(req.body);
+  if (!validated.ok) {
+    res.status(400).json({ error: 'validation failed', details: validated.errors });
     return;
   }
-  const { title, description, status } = req.body;
-  if (title !== undefined) task.title = title;
-  if (description !== undefined) task.description = description;
-  if (status !== undefined) task.status = status;
-  task.updatedAt = new Date().toISOString();
-  res.json(task);
+  const result = taskService.updateTask(req.params.id, validated.value);
+  if (!result.ok) {
+    if (result.error.kind === 'not_found') {
+      res.status(404).json({ error: 'task not found' });
+      return;
+    }
+    res.status(409).json({ error: result.error.message });
+    return;
+  }
+  res.json(result.value);
 });
 
 tasksRouter.delete('/:id', (req, res) => {
-  const task = tasks.get(req.params.id);
-  if (!task) {
-    res.status(404).json({ error: 'Task not found' });
+  const result = taskService.deleteTask(req.params.id);
+  if (!result.ok) {
+    res.status(404).json({ error: 'task not found' });
     return;
   }
-  tasks.delete(req.params.id);
   res.status(204).end();
 });
