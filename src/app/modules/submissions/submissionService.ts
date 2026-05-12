@@ -13,6 +13,75 @@ const BINARY_EXTENSIONS = new Set([
 /** Max file size in bytes (1 MB) */
 const MAX_FILE_SIZE = 1_048_576;
 
+interface ClaudeTranscriptStats {
+  prompts: number;
+  toolCalls: number;
+  tokensIn: number;
+  tokensOut: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOnlyToolResults(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length === 0) return false;
+  return value.every((item) => isRecord(item) && item.type === 'tool_result');
+}
+
+function countMessageToolUses(record: Record<string, unknown>): number {
+  if (record.type === 'tool_use') return 1;
+
+  const message = isRecord(record.message) ? record.message : null;
+  const content = message?.content ?? record.content;
+  if (!Array.isArray(content)) return 0;
+
+  return content.filter((item) => isRecord(item) && item.type === 'tool_use').length;
+}
+
+function parseClaudeTranscriptStats(content: string): ClaudeTranscriptStats {
+  const stats: ClaudeTranscriptStats = {
+    prompts: 0,
+    toolCalls: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+  };
+
+  const lines = content.split('\n').filter((line) => line.trim().length > 0);
+  for (const line of lines) {
+    try {
+      const record: unknown = JSON.parse(line);
+      if (!isRecord(record)) continue;
+
+      const message = isRecord(record.message) ? record.message : null;
+      const topLevelRole = typeof record.role === 'string' ? record.role : null;
+      const messageRole = typeof message?.role === 'string' ? message.role : null;
+      const type = typeof record.type === 'string' ? record.type : null;
+
+      const messageContent = message?.content;
+      const isUserMessage =
+        type === 'human' || type === 'user' || topLevelRole === 'user' || messageRole === 'user';
+      if (isUserMessage && !isOnlyToolResults(messageContent)) {
+        stats.prompts += 1;
+      }
+
+      stats.toolCalls += countMessageToolUses(record);
+
+      const usage = isRecord(record.usage)
+        ? record.usage
+        : (isRecord(message?.usage) ? message.usage : null);
+      if (usage) {
+        stats.tokensIn += typeof usage.input_tokens === 'number' ? usage.input_tokens : 0;
+        stats.tokensOut += typeof usage.output_tokens === 'number' ? usage.output_tokens : 0;
+      }
+    } catch {
+      // Skip malformed lines
+    }
+  }
+
+  return stats;
+}
+
 /**
  * Captures the final submission for a session by reading all sandbox files
  * and aggregating activity stats from the database.
@@ -85,25 +154,8 @@ export class SubmissionService {
     let transcriptToolCalls = 0;
 
     for (const transcript of claudeTranscripts) {
-      let prompts = 0;
-      let toolCalls = 0;
-      let tokensIn = 0;
-      let tokensOut = 0;
-
-      const lines = transcript.content.split('\n').filter((l) => l.trim().length > 0);
-      for (const line of lines) {
-        try {
-          const record = JSON.parse(line);
-          if (record.type === 'human' || record.role === 'user') prompts++;
-          if (record.type === 'tool_result' || record.type === 'tool_use') toolCalls++;
-          if (record.usage) {
-            tokensIn += record.usage.input_tokens ?? 0;
-            tokensOut += record.usage.output_tokens ?? 0;
-          }
-        } catch {
-          // Skip malformed lines
-        }
-      }
+      const { prompts, toolCalls, tokensIn, tokensOut } =
+        parseClaudeTranscriptStats(transcript.content);
 
       transcriptPrompts += prompts;
       transcriptToolCalls += toolCalls;

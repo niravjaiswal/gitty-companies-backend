@@ -364,12 +364,15 @@ export class ActivityCollector {
               : JSON.stringify(payload).slice(0, 1000);
             break;
           case 'PreToolUse':
-          case 'PostToolUse':
             eventType = 'claude_tool_use';
             detail = typeof payload.tool_name === 'string'
               ? payload.tool_name
               : (typeof payload.name === 'string' ? payload.name : hookEvent);
             break;
+          case 'PostToolUse':
+            // PreToolUse marks the tool invocation. Counting PostToolUse too
+            // reports one Claude tool call as two usage events.
+            continue;
           case 'Stop':
             eventType = 'claude_response';
             detail = typeof payload.last_assistant_message === 'string'
