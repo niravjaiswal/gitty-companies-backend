@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
@@ -12,10 +12,20 @@ const SKELETONS_DIR = join(__dirname, '..');
 
 async function listSkeletonIds(): Promise<string[]> {
   const entries = await readdir(SKELETONS_DIR, { withFileTypes: true });
-  return entries
+  const candidates = entries
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith('__'))
-    .map((entry) => entry.name)
-    .sort();
+    .map((entry) => entry.name);
+
+  const ids: string[] = [];
+  for (const name of candidates) {
+    try {
+      await access(join(SKELETONS_DIR, name, 'skeleton.json'));
+      ids.push(name);
+    } catch {
+      // Sibling directories (e.g. scoring/) are not skeletons; skip them.
+    }
+  }
+  return ids.sort();
 }
 
 describe('skeleton library', () => {

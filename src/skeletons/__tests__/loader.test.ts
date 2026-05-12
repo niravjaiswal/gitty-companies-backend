@@ -18,7 +18,7 @@ describe("loadSkeleton", () => {
       "Pulseboard Launch Sprint",
     );
 
-    expect(loaded.manifest.files.length).toBe(16);
+    expect(loaded.manifest.files.length).toBe(19);
     expect(loaded.manifest.files.find((f) => f.path === "src/App.tsx")?.role).toBe(
       "candidate",
     );
@@ -37,7 +37,7 @@ describe("loadSkeleton", () => {
     expect(loaded.skeleton.language).toBe("typescript");
     expect(loaded.skeleton.pattern).toBe("rest-api");
 
-    expect(loaded.manifest.files.length).toBe(8);
+    expect(loaded.manifest.files.length).toBe(18);
 
     for (const entry of loaded.manifest.files) {
       expect(loaded.files[entry.path]).toBeDefined();

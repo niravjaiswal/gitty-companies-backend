@@ -3,13 +3,40 @@
   "language": "typescript",
   "pattern": "rest-api",
   "difficulty_range": { "min": "junior", "max": "mid" },
-  "skill_axes": ["api_design", "error_handling", "testing_strategy", "validation"],
-  "estimated_scope": { "min": "1-2 hours", "max": "2-4 hours" },
+  "skill_axes": ["api_design", "code_organization", "error_handling", "testing_strategy", "validation"],
+  "estimated_scope": { "min": "2-4 hours", "max": "4-6 hours" },
   "domain_tags": ["backend"],
-  "description": "An Express REST API with TypeScript and vitest. Candidates implement a missing PUT endpoint for task updates with validation and error handling.",
+  "description": "An Express + TypeScript REST API where two divergent validation patterns coexist on sibling routers. Candidates consolidate to one pattern, unify the error response shape across resources, and reconcile inconsistent service-to-HTTP error mapping.",
   "assessment_copy": {
     "title": "Task Board API",
-    "summary": "An Express REST API skeleton where candidates implement missing CRUD operations with proper validation and error handling.",
-    "instructions_md": "# Task Board API\n\n## Overview\n\nYou are working on a task management REST API built with Express and TypeScript. The API manages tasks with CRUD operations.\n\nMost endpoints are already implemented. Your job is to finish the missing `PUT /tasks/:id` endpoint that updates an existing task.\n\n## Core task\n\nImplement the `PUT /tasks/:id` endpoint in `src/routes/tasks.ts`.\n\nThe endpoint should:\n- Accept a JSON body with optional `title`, `description`, and `status` fields\n- Return 404 if the task doesn't exist\n- Return 400 if no valid fields are provided\n- Return the updated task as JSON\n- Validate that status is one of: 'todo', 'in_progress', 'done'\n\n## Candidate workflow\n\n1. Read the existing code to understand the data model and patterns\n2. Run the tests to see what's expected\n3. Implement the missing endpoint\n4. Make all tests pass\n\n## Commands\n\n```bash\nnpm install\nnpm run dev\nnpm test\n```"
-  }
+    "summary": "An Express REST API with two resources (Tasks, Projects) whose routers were written by different people using different validation patterns. Candidates consolidate validation, unify the error shape, and reconcile service-error to HTTP mapping.",
+    "instructions_md": "# Task Board API\n\n## Overview\n\nYou are working on a task management REST API built with Express and TypeScript. It manages two related resources — Tasks and Projects — each with full CRUD plus list filtering.\n\nThe two routers were written by different people. They both pass their tests, but they validate request bodies in two different ways and translate service-layer errors into HTTP responses inconsistently.\n\n## Core task\n\nConsolidate validation across both routers and unify the error response shape.\n\nYou should:\n- pick one validation pattern (zod *or* manual) and migrate the other router to use it\n- unify the error response shape so `/tasks` and `/projects` return identical body structure for the same kind of failure\n- audit how each router translates service-layer errors (`{ kind: 'not_found', resource: ... }`) into HTTP responses and make them match\n- delete the now-unused validator file once migration is complete\n- keep `src/__tests__/consistency.test.ts` (the contract) passing — do not edit it\n\n## Candidate workflow\n\n- Read both routers and both validation files to understand the divergence.\n- Run the tests to see the current behavior.\n- Pick a pattern, migrate the other side, unify the error envelope.\n- Keep all three test files green and the codebase typecheck-clean.\n\n## Sandbox commands\n\n```bash\nnpm install\nnpm run dev\nnpm test\nnpm run build\n```\n\n## What we are looking for\n\n- **Internal consistency** — once you pick a pattern, the codebase should look like one person wrote it.\n- **Error envelope design** — pick a shape, apply it everywhere, document it briefly in the README.\n- **Service-layer integrity** — the service layer returns structured `{ kind, resource }` errors; the route layer should translate them faithfully and identically across resources.\n- **Tests as a contract** — `consistency.test.ts` pins the cross-resource invariant; do not edit it to make it pass.\n\n## Submission\n\n- Keep the repo runnable.\n- Keep all three test files green.\n- Leave a short note in the README about the validation pattern and error shape you chose."
+  },
+  "variation_axes": [
+    {
+      "id": "error_envelope_shape",
+      "kind": "enum",
+      "skill_axis": "api_design",
+      "values": ["rfc7807_problem_details", "flat_field_map", "zod_path_array"],
+      "default": "flat_field_map",
+      "description": "What unified error response shape the consolidated routers must produce. rfc7807_problem_details uses `{type, title, status, detail, errors: [{field, message}]}`. flat_field_map uses `{errors: {field: message}}`. zod_path_array uses `{errors: [{path: [...], message}]}` matching raw zod issue output."
+    },
+    {
+      "id": "consolidation_target",
+      "kind": "enum",
+      "skill_axis": "code_organization",
+      "values": ["zod_must_win", "manual_must_win", "candidate_choice"],
+      "default": "candidate_choice",
+      "description": "Which validation pattern must survive consolidation. zod_must_win requires the candidate to migrate the manual router to zod and delete manual.ts. manual_must_win requires the inverse. candidate_choice leaves the decision open and graded on consistency of execution."
+    },
+    {
+      "id": "consistency_invariant_count",
+      "kind": "range",
+      "skill_axis": "testing_strategy",
+      "min": 3,
+      "max": 7,
+      "default": 5,
+      "description": "Target number of distinct cross-resource invariants the consistency.test.ts contract must enforce (e.g. identical error envelope for empty body, identical envelope for invalid enum, identical 404 body shape, identical status code on validation failure). Higher values demand more careful spec interpretation."
+    }
+  ]
 }
