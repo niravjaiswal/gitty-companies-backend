@@ -1,8 +1,42 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { authenticate } from '../../infra/auth/auth.js';
 import { getSupabaseAdmin } from '../../infra/db/supabase.js';
-import { getCompanyMembership } from '../../infra/auth/companyAuth.js';
+import { getCompanyMembership, type CompanyMembership } from '../../infra/auth/companyAuth.js';
 import { GradingService } from './gradingService.js';
+
+async function getCompanyOwnedSession(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  sessionId: string,
+  membership: CompanyMembership,
+) {
+  const { data: session } = await supabase
+    .from('sessions')
+    .select('id, assignment_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  if (!session) {
+    return { status: 404 as const, error: 'Session not found' };
+  }
+
+  const assignmentId = session.assignment_id as string | null;
+  if (!assignmentId) {
+    return { status: 403 as const, error: 'Not authorized for this session' };
+  }
+
+  const { data: assignment } = await supabase
+    .from('assessment_assignments')
+    .select('id')
+    .eq('id', assignmentId)
+    .eq('company_id', membership.companyId)
+    .maybeSingle();
+
+  if (!assignment) {
+    return { status: 403 as const, error: 'Not authorized for this session' };
+  }
+
+  return { status: 200 as const, session };
+}
 
 export async function gradingRoutes(
   fastify: FastifyInstance,
@@ -21,15 +55,9 @@ export async function gradingRoutes(
 
       const supabase = getSupabaseAdmin();
 
-      // Verify the session belongs to a submission within this company
-      const { data: session } = await supabase
-        .from('sessions')
-        .select('id, assignment_id')
-        .eq('id', request.params.sessionId)
-        .maybeSingle();
-
-      if (!session) {
-        return reply.status(404).send({ error: 'Session not found' });
+      const ownedSession = await getCompanyOwnedSession(supabase, request.params.sessionId, membership);
+      if (ownedSession.status !== 200) {
+        return reply.status(ownedSession.status).send({ error: ownedSession.error });
       }
 
       const gradingService = new GradingService(supabase, fastify.log);
@@ -61,14 +89,9 @@ export async function gradingRoutes(
 
       const supabase = getSupabaseAdmin();
 
-      const { data: session } = await supabase
-        .from('sessions')
-        .select('id, assignment_id')
-        .eq('id', request.params.sessionId)
-        .maybeSingle();
-
-      if (!session) {
-        return reply.status(404).send({ error: 'Session not found' });
+      const ownedSession = await getCompanyOwnedSession(supabase, request.params.sessionId, membership);
+      if (ownedSession.status !== 200) {
+        return reply.status(ownedSession.status).send({ error: ownedSession.error });
       }
 
       const gradingService = new GradingService(supabase, fastify.log);
