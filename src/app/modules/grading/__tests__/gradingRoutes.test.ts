@@ -71,7 +71,12 @@ const COMPANY_ID = 'company-abc';
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  await app.register(gradingRoutes);
+  const gradingQueue = {
+    enqueue: vi.fn().mockResolvedValue(undefined),
+    getJobStatus: vi.fn().mockResolvedValue(null),
+  } as any;
+  const sandboxService = {} as any;
+  await app.register(gradingRoutes, { gradingQueue, sandboxService });
   await app.ready();
   return app;
 }
