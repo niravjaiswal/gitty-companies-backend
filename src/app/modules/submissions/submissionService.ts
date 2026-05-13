@@ -218,6 +218,28 @@ export class SubmissionService {
     this.logger.info(
       `Submission captured for session ${sessionId}: ${fileCount} files, ${totalBytes} bytes, ${commandCount ?? 0} commands, ${fileChangeCount ?? 0} file changes, ${totalClaudePrompts} claude prompts, ${totalClaudeToolCalls} claude tool calls`,
     );
+
+    // Enqueue grading job. Best-effort: failure to enqueue should not fail
+    // the submission capture, since the recruiter can re-trigger via POST /grade.
+    const { error: queueError } = await this.supabase
+      .from('grading_jobs')
+      .upsert(
+        {
+          session_id: sessionId,
+          status: 'pending',
+          stage: null,
+          attempts: 0,
+          started_at: null,
+          completed_at: null,
+          error: null,
+        },
+        { onConflict: 'session_id' },
+      );
+    if (queueError) {
+      this.logger.warn(`Failed to enqueue grading job for session ${sessionId}: ${queueError.message}`);
+    } else {
+      this.logger.info(`Enqueued grading job for session ${sessionId}`);
+    }
   }
 
   /**

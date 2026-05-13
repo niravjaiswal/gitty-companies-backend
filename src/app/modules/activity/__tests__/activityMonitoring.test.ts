@@ -1590,6 +1590,11 @@ describe('SubmissionService', () => {
           }),
         };
       }
+      if (table === 'grading_jobs') {
+        return {
+          upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }
       return supabase._chain;
     });
   }
@@ -1949,6 +1954,11 @@ describe('SubmissionService', () => {
         if (table === 'final_submissions') {
           return {
             insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }
+        if (table === 'grading_jobs') {
+          return {
+            upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
           };
         }
         return supabase._chain;
